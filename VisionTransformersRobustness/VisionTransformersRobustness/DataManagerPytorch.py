@@ -231,7 +231,12 @@ def GetCIFAR10Validation(imgSize = 32, batchSize=128):
         transforms.Resize((imgSize, imgSize)),
         transforms.ToTensor()
     ])
-    valLoader = torch.utils.data.DataLoader(datasets.CIFAR10(root='./data', train=False, download=True, transform=transformTest), batch_size=batchSize, shuffle=False, num_workers=1, pin_memory=True)
+
+    val_dataset = datasets.CIFAR10(root='./data', train=False, download=True, transform=transformTest)
+
+    val_dataset, _ = torch.utils.data.random_split(train_dataset, [5000, 5000])
+    logger.info('Val dataset length {}'.format(len(val_dataset)))
+    valLoader = torch.utils.data.DataLoader(val_dataset, batch_size=batchSize, shuffle=False, num_workers=1, pin_memory=True)
     return valLoader
 
 #This data is in the range 0 to 1
@@ -287,11 +292,13 @@ def GetCorrectlyIdentifiedSamplesBalancedDefense(defense, totalSamplesRequired, 
     #Basic error checking 
     if totalSamplesRequired % numClasses != 0:
         raise ValueError("The total number of samples in not evenly divisable by the number of classes.")
+
     #Get the number of samples needed for each class
     numSamplesPerClass = int(totalSamplesRequired/numClasses) 
     correctlyClassifiedSamples = torch.zeros((numClasses, numSamplesPerClass, sampleShape[0], sampleShape[1], sampleShape[2]))
     sanityCounter = torch.zeros((numClasses))
     #yPred = model.predict(xData)
+
     yPred = defense.predictD(dataLoader, numClasses)
     for i in range(0, xData.shape[0]): #Go through every sample 
         predictedClass = yPred[i].argmax(axis=0)
@@ -301,10 +308,12 @@ def GetCorrectlyIdentifiedSamplesBalancedDefense(defense, totalSamplesRequired, 
         if predictedClass == trueClass and currentSavedCount<numSamplesPerClass:
             correctlyClassifiedSamples[int(trueClass), currentSavedCount] = xData[i] #Save the sample 
             sanityCounter[int(trueClass)] = sanityCounter[int(trueClass)] + 1 #Add one to the count of saved samples for this class
+    
     #Now we have gone through the entire network, make sure we have enough samples
     for c in range(0, numClasses):
         if sanityCounter[c] != numSamplesPerClass:
             raise ValueError("The network does not have enough correctly predicted samples for this class.")
+    
     #Assume we have enough samples now, restore in a properly shaped array 
     xCorrect = torch.zeros((totalSamplesRequired, xData.shape[1], xData.shape[2], xData.shape[3]))
     yCorrect = torch.zeros((totalSamplesRequired))
@@ -314,7 +323,8 @@ def GetCorrectlyIdentifiedSamplesBalancedDefense(defense, totalSamplesRequired, 
             xCorrect[currentIndex] = correctlyClassifiedSamples[c,j]
             yCorrect[currentIndex] = c
             #yCorrect[currentIndex, c] = 1.0
-            currentIndex = currentIndex + 1 
+            currentIndex = currentIndex + 1
+
     #return xCorrect, yCorrect
     cleanDataLoader = TensorToDataLoader(xCorrect, yCorrect, transforms = None, batchSize = dataLoader.batch_size, randomizer = None)
     return cleanDataLoader
