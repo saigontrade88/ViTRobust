@@ -245,7 +245,13 @@ def GetCIFAR10Training(imgSize = 32, batchSize=128):
         transforms.Resize((imgSize, imgSize)),
         transforms.ToTensor()
     ])
-    trainLoader = torch.utils.data.DataLoader(datasets.CIFAR10(root='./data', train=True, download=True, transform=toTensorTransform), batch_size=batchSize, shuffle=False, num_workers=1, pin_memory=True)
+
+    train_dataset = datasets.CIFAR10(root='./data', train=True, download=True, transform=toTensorTransform)
+
+    train_dataset, _= torch.utils.data.random_split(val_dataset, [1000, 49000])
+    logger.info('Train dataset length {}'.format(len(train_dataset)))
+
+    trainLoader = torch.utils.data.DataLoader(train_dataset, batch_size=batchSize, shuffle=False, num_workers=1, pin_memory=True)
     return trainLoader
 
 def GetCorrectlyIdentifiedSamplesBalanced(model, totalSamplesRequired, dataLoader, numClasses):
