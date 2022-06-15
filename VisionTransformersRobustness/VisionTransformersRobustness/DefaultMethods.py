@@ -123,9 +123,9 @@ def RaySAttackVisionTransformer():
     robustAcc = defense.validateD(advLoader)
     cleanAcc = defense.validateD(valLoader)
     #logger.info the results 
-    logger.info("Queries used:", queryLimit)
-    logger.info("Robust acc:", robustAcc)
-    logger.info("Clean acc:", cleanAcc)
+    logger.info("Queries used: {}".format(queryLimit))
+    logger.info("Robust acc: {}".format(robustAcc))
+    logger.info("Clean acc: {}".format(cleanAcc))
 
 #Here we do the RayS attack on a shuffle defense comprised of two models, ViT-L-16 and BiT-M-R101x3
 def RaySAttackShuffleDefense():
@@ -152,14 +152,16 @@ def RaySAttackShuffleDefense():
     logger.info('Data inputs {}'.format(data_inputs.shape))
     logger.info('Data labels {}'.format(data_labels.shape))
 
-    #Check the results 
+    #Check the results
+    logger.info('Robust accuracy of the ensemble model')
     robustAcc = defense.validateD(advLoader)
+    logger.info('Clean accuracy of the ensemble model')
     cleanAcc = defense.validateD(valLoader)
 
     #Print the results 
-    logger.info("Queries used:", queryLimit)
-    logger.info("Robust acc:", robustAcc)
-    logger.info("Clean acc:", cleanAcc)
+    logger.info("Queries used: {}".format(queryLimit))
+    logger.info("Robust acc: {}".format(robustAcc))
+    logger.info("Clean acc: {}".format(cleanAcc))
 
 #Run the 100% strength adaptive attack on ViT-L-16
 def AdaptiveAttackVisionTransformer():
@@ -275,4 +277,4 @@ def SelfAttentionGradientAttackCIFAR10():
     #Go through and check the robust accuray of each model on the adversarial examples 
     for i in range(0, len(modelPlusList)):
         acc = modelPlusList[i].validateD(advLoader)
-        logger.info(modelPlusList[i].modelName+" Robust Acc:", acc)
+        logger.info('model Name {} Robust acc: {}'.format(modelPlusList[i].modelName, acc))
