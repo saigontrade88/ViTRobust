@@ -234,7 +234,7 @@ def GetCIFAR10Validation(imgSize = 32, batchSize=128):
 
     val_dataset = datasets.CIFAR10(root='./data', train=False, download=True, transform=transformTest)
 
-    val_dataset, _ = torch.utils.data.random_split(train_dataset, [5000, 5000])
+    val_dataset, _ = torch.utils.data.random_split(val_dataset, [1000, 9000])
     logger.info('Val dataset length {}'.format(len(val_dataset)))
     valLoader = torch.utils.data.DataLoader(val_dataset, batch_size=batchSize, shuffle=False, num_workers=1, pin_memory=True)
     return valLoader
