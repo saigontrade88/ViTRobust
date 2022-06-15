@@ -21,7 +21,7 @@ class ModelPlus():
         dataLoaderFinal = self.formatDataLoader(dataLoader)
         #Make a copy of the model and put it on the GPU
         currentModel = self.model
-        currentModel.to(self.device)
+        currentModel.to(self.device) #Push model to device. Has to be only done once.
         #Get the accuracy
         acc = DMP.validateD(dataLoaderFinal, currentModel)
         #Clean up the GPU memory

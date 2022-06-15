@@ -3,6 +3,13 @@ import torchvision.transforms as transforms
 import torchvision.datasets as datasets
 import math 
 import random 
+import logging
+
+#Set up logger
+logging.basicConfig(level=logging.INFO,
+                    format='%(asctime)s.%(msecs)03d %(levelname)-6s %(name)s :: %(message)s',
+                    datefmt='%Y-%m-%d %H:%M:%S')
+logger = logging.getLogger(__name__)
 
 #Class to help with converting between dataloader and pytorch tensor 
 class MyDataSet(torch.utils.data.Dataset):
@@ -24,8 +31,9 @@ class MyDataSet(torch.utils.data.Dataset):
 def validateD(valLoader, model, device=None):
     #switch to evaluate mode
     model.eval()
-    acc = 0 
+    acc = 0 #true prediction
     batchTracker = 0
+    #deactivate the computation graph and no gradient calculation for the following code.
     with torch.no_grad():
         #Go through and process the data in batches 
         for i, (input, target) in enumerate(valLoader):
@@ -36,7 +44,7 @@ def validateD(valLoader, model, device=None):
                 inputVar = input.cuda()
             else:
                 inputVar = input.to(device)
-            #compute output
+            #prediction
             output = model(inputVar)
             output = output.float()
             #Go through and check how many samples correctly identified
@@ -44,6 +52,8 @@ def validateD(valLoader, model, device=None):
                 if output[j].argmax(axis=0) == target[j]:
                     acc = acc +1
     acc = acc / float(len(valLoader.dataset))
+    logger.info('Accuracy of the model: {}'.format(100.0 * acc))
+
     return acc
 
 #Method to validate data using Pytorch tensor inputs and a Pytorch model 
@@ -74,6 +84,7 @@ def validateT(xData, yData, model, batchSize=None):
                 modelOutputIndex = modelOutputIndex + 1 #update the output index regardless
     #Do final averaging and return 
     acc = acc / numSamples
+    logger.info('Accuracy of the model: {}'.format(100.0 * acc))
     return acc
 
 #Input a dataloader and model
@@ -106,7 +117,8 @@ def validateDA(valLoader, model, device=None):
                     accuracy = accuracy + 1
                 indexer = indexer + 1 #update the indexer regardless 
     accuracy = accuracy/numSamples
-    print("Accuracy:", accuracy)
+    # print("Accuracy:", accuracy)
+    logger.info('Accuracy of the model: {}'.format(100.0 * accuracy))
     return accuracyArray
 
 #Replicate TF's predict method behavior 

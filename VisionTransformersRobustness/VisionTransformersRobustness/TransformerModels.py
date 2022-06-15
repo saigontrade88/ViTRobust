@@ -282,6 +282,8 @@ class VisionTransformer(nn.Module):
         self.matrixMean= self.matrixMean.cuda()
         self.matrixStd = self.matrixStd.cuda()
 
+        print('Create a ViT-L-16 instance from ViT-L_16 spec.')
+
     def forward(self, x, labels=None):
         x = (x-self.matrixMean)/self.matrixStd
         x, attn_weights = self.transformer(x)
