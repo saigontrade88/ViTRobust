@@ -109,7 +109,7 @@ def LoadShuffleDefenseAndCIFAR10(vis=False):
 #Method to do the RayS attack - query based blackbox attack on a single Vision Transformers
 def RaySAttackVisionTransformer():
     #Load the model and dataset
-    logger.info('Load the model (model architecture and model weights), dataset, and model evaluation')
+    logger.info('RaySAttackVisionTransformer :: Load the model (model architecture and model weights), dataset, and model evaluation')
     valLoader, defense = LoadViTLAndCIFAR10()
     #Get the clean samples
     numClasses = 10
@@ -124,9 +124,9 @@ def RaySAttackVisionTransformer():
     robustAcc = defense.validateD(advLoader)
     cleanAcc = defense.validateD(valLoader)
     #logger.info the results 
-    logger.info("Queries used: {}".format(queryLimit))
-    logger.info("Robust acc: {}".format(robustAcc))
-    logger.info("Clean acc: {}".format(cleanAcc))
+    logger.info("RaySAttackVisionTransformer :: Queries used: {}".format(queryLimit))
+    logger.info("RaySAttackVisionTransformer :: Robust acc: {}".format(robustAcc))
+    logger.info("RaySAttackVisionTransformer :: Clean acc: {}".format(cleanAcc))
 
 #Here we do the RayS attack on a shuffle defense comprised of two models, ViT-L-16 and BiT-M-R101x3
 def RaySAttackShuffleDefense():
@@ -138,9 +138,9 @@ def RaySAttackShuffleDefense():
     cleanLoader = DMP.GetCorrectlyIdentifiedSamplesBalancedDefense(defense, attackSampleNum, valLoader, numClasses)
 
     data_inputs, data_labels = next(iter(cleanLoader))
-    logger.info('Sucessfully generate clean examples that are correctly classified by BOTH models. Print basic info of the first batch')
-    logger.info('Data inputs {}'.format(data_inputs.shape))
-    logger.info('Data labels {}'.format(data_labels.shape))
+    logger.info('RaySAttackShuffleDefense :: Sucessfully generate clean examples that are correctly classified by BOTH models. Print basic info of the first batch')
+    logger.info('RaySAttackShuffleDefense :: Data inputs {}'.format(data_inputs.shape))
+    logger.info('RaySAttackShuffleDefense :: Data labels {}'.format(data_labels.shape))
 
     #Set the attack parameters 
     epsMax = 0.031
@@ -149,26 +149,26 @@ def RaySAttackShuffleDefense():
     advLoader = AttackWrappersRayS.RaySAttack(defense, epsMax, queryLimit, cleanLoader)
 
     data_inputs, data_labels = next(iter(advLoader))
-    logger.info('Sucessfully generate adversarial examples that fool BOTH models. Print basic info of the first batch')
-    logger.info('Data inputs {}'.format(data_inputs.shape))
-    logger.info('Data labels {}'.format(data_labels.shape))
+    logger.info('RaySAttackShuffleDefense :: Sucessfully generate adversarial examples that fool BOTH models. Print basic info of the first batch')
+    logger.info('RaySAttackShuffleDefense :: Data inputs {}'.format(data_inputs.shape))
+    logger.info('RaySAttackShuffleDefense :: Data labels {}'.format(data_labels.shape))
 
     #Check the results
-    logger.info('Robust accuracy of the ensemble model')
+    logger.info('RaySAttackShuffleDefense :: Robust accuracy of the ensemble model')
     robustAcc = defense.validateD(advLoader)
-    logger.info('Clean accuracy of the ensemble model')
+    logger.info('RaySAttackShuffleDefense :: Clean accuracy of the ensemble model')
     cleanAcc = defense.validateD(valLoader)
 
     #Print the results 
-    logger.info("Queries used: {}".format(queryLimit))
-    logger.info("Robust acc: {}".format(robustAcc))
-    logger.info("Clean acc: {}".format(cleanAcc))
+    logger.info("RaySAttackShuffleDefense :: Queries used: {}".format(queryLimit))
+    logger.info("RaySAttackShuffleDefense :: Robust acc: {}".format(robustAcc))
+    logger.info("RaySAttackShuffleDefense :: Clean acc: {}".format(cleanAcc))
 
 #Run the 100% strength adaptive attack on ViT-L-16, transfer based blackbox attack
 def AdaptiveAttackVisionTransformer():
     #Corresponding tag for saving files
     #First part indicates the type of defense, second part indidcates the synthetic model and last part indicates the strenght of the attack (100%)
-    saveTag = "ViT-L-16, ViT-32(ImageNet21K), p100" 
+    saveTag = "AdaptiveAttackVisionTransformer_ViT-L-16, ViT-32(ImageNet21K), p100" 
     device = torch.device("cuda")
     logger.info("Device {}".format(device))
 
@@ -190,9 +190,9 @@ def AdaptiveAttackVisionTransformer():
 
     trainLoader = DMP.GetCIFAR10Training(imgSize, batchSize)
     data_inputs, data_labels = next(iter(trainLoader))
-    logger.info('Sucessfully load the train data. Print basic info of the first batch')
-    logger.info('Data inputs {}'.format(data_inputs.shape))
-    logger.info('Data labels {}'.format(data_labels.shape))
+    logger.info('AdaptiveAttackVisionTransformer :: Sucessfully load the train data. Print basic info of the first batch')
+    logger.info('AdaptiveAttackVisionTransformer :: Data inputs {}'.format(data_inputs.shape))
+    logger.info('AdaptiveAttackVisionTransformer :: Data labels {}'.format(data_labels.shape))
 
     #Get the clean data 
     xTest, yTest = DMP.DataLoaderToTensor(valLoader)
@@ -200,9 +200,9 @@ def AdaptiveAttackVisionTransformer():
     #Clean validation loader
     cleanLoader = DMP.GetCorrectlyIdentifiedSamplesBalancedDefense(defense, numAttackSamples, valLoader, numClasses)
     data_inputs, data_labels = next(iter(cleanLoader))
-    logger.info('Sucessfully generate clean examples that are correctly classified by BOTH models. Print basic info of the first batch')
-    logger.info('Data inputs {}'.format(data_inputs.shape))
-    logger.info('Data labels {}'.format(data_labels.shape))
+    logger.info('AdaptiveAttackVisionTransformer :: Sucessfully generate clean examples that are correctly classified by BOTH models. Print basic info of the first batch')
+    logger.info('AdaptiveAttackVisionTransformer :: Data inputs {}'.format(data_inputs.shape))
+    logger.info('AdaptiveAttackVisionTransformer :: Data labels {}'.format(data_labels.shape))
 
 
     #Create the synthetic model to generate adversarial examples
@@ -211,7 +211,7 @@ def AdaptiveAttackVisionTransformer():
     syntheticModel = VisionTransformer(config, imgSize, zero_head=True, num_classes=numClasses)
     syntheticModel.load_from(numpy.load(syntheticDir))  
     syntheticModel.to(device)
-    logger.info('Successfully load pre-train model {} to device'.format(syntheticDir, device))
+    logger.info('AdaptiveAttackVisionTransformer :: Successfully load pre-train model {} to device'.format(syntheticDir, device))
 
     #Do the attack 
     oracle = defense
@@ -251,6 +251,7 @@ def AdaptiveAttackShuffleDefense():
     logger.info('AdaptiveAttackShuffleDefense :: Sucessfully load the ensemble defense. Print basic info of the first batch')
 
     trainLoader = DMP.GetCIFAR10Training(imgSize, batchSize)
+    data_inputs, data_labels = next(iter(trainLoader))
     logger.info('AdaptiveAttackShuffleDefense :: Sucessfully load the train data. Print basic info of the first batch')
     logger.info('AdaptiveAttackShuffleDefense :: Data inputs {}'.format(data_inputs.shape))
     logger.info('AdaptiveAttackShuffleDefense :: Data labels {}'.format(data_labels.shape))
@@ -259,6 +260,7 @@ def AdaptiveAttackShuffleDefense():
     xTest, yTest = DMP.DataLoaderToTensor(valLoader)
     cleanLoader = DMP.GetCorrectlyIdentifiedSamplesBalancedDefense(defense, numAttackSamples, valLoader, numClasses)
 
+    data_inputs, data_labels = next(iter(cleanLoader))
     logger.info('AdaptiveAttackShuffleDefense :: Sucessfully generate clean examples that are correctly classified by BOTH models. Print basic info of the first batch')
     logger.info('AdaptiveAttackShuffleDefense :: Data inputs {}'.format(data_inputs.shape))
     logger.info('AdaptiveAttackShuffleDefense :: Data labels {}'.format(data_labels.shape))
@@ -283,7 +285,7 @@ def AdaptiveAttackShuffleDefense():
 
 #Run the Self-Attention Gradient Attack (SAGA) on ViT-L and BiT-M-R101x3
 def SelfAttentionGradientAttackCIFAR10():
-    logger.info("Running Self-Attention Gradient Attack on ViT-L-16 and BiT-M-R101x3")
+    logger.info("SelfAttentionGradientAttackCIFAR10 :: Running Self-Attention Gradient Attack on ViT-L-16 and BiT-M-R101x3")
     #Set up the parameters for the attack 
     attackSampleNum = 10 #1000
     numClasses = 10
@@ -303,15 +305,36 @@ def SelfAttentionGradientAttackCIFAR10():
     #Load the models and the dataset
     #Note it is important to set vis to true so the transformer's model output returns the attention weights 
     valLoader, defense = LoadShuffleDefenseAndCIFAR10(vis=True)
+
+    data_inputs, data_labels = next(iter(valLoader))
+    logger.info('SelfAttentionGradientAttackCIFAR10 :: Sucessfully load the valid data. Print basic info of the first batch')
+    logger.info('SelfAttentionGradientAttackCIFAR10 :: Data inputs {}'.format(data_inputs.shape))
+    logger.info('SelfAttentionGradientAttackCIFAR10 :: Data labels {}'.format(data_labels.shape))
+
     modelPlusList = defense.modelPlusList
     #Note that the batch size will effect how the gradient is computed in PyTorch
     #Here we use batch size 8 for ViT-L and batch size 2 for BiT-M. Other batch sizes are possible but they will not generate the same result
     modelPlusList[0].batchSize = 8
     modelPlusList[1].batchSize = 2
+
     #Get the clean examples 
-    cleanLoader =AttackWrappersSAGA.GetFirstCorrectlyOverlappingSamplesBalanced(device, attackSampleNum, numClasses, valLoader, modelPlusList)
+    cleanLoader =AttackWrappersSAGA.GetFirstCorrectlyOverlappingSamplesBalanced(device, 
+                                attackSampleNum, numClasses, valLoader, modelPlusList)
+
+    data_inputs, data_labels = next(iter(cleanLoader))
+    logger.info('SelfAttentionGradientAttackCIFAR10 :: Sucessfully load the clean data that are classified corrected by the component models. Print basic info of the first batch')
+    logger.info('SelfAttentionGradientAttackCIFAR10 :: Data inputs {}'.format(data_inputs.shape))
+    logger.info('SelfAttentionGradientAttackCIFAR10 :: Data labels {}'.format(data_labels.shape))
+
     #Do the attack
-    advLoader = AttackWrappersSAGA.SelfAttentionGradientAttack(device, epsMax, numSteps, modelPlusList, coefficientArray, cleanLoader, clipMin, clipMax)
+    advLoader = AttackWrappersSAGA.SelfAttentionGradientAttack(device, epsMax, 
+        numSteps, modelPlusList, coefficientArray, cleanLoader, clipMin, clipMax)
+
+    data_inputs, data_labels = next(iter(advLoader))
+    logger.info('SelfAttentionGradientAttackCIFAR10 :: Sucessfully generate the adversarial examples using the proposed attack. Print basic info of the first batch')
+    logger.info('SelfAttentionGradientAttackCIFAR10 :: Data inputs {}'.format(data_inputs.shape))
+    logger.info('SelfAttentionGradientAttackCIFAR10 :: Data labels {}'.format(data_labels.shape))
+
     #Go through and check the robust accuray of each model on the adversarial examples 
     for i in range(0, len(modelPlusList)):
         acc = modelPlusList[i].validateD(advLoader)
