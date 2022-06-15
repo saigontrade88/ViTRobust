@@ -4,7 +4,8 @@ import AttackWrappersWhiteBoxP
 import DataManagerPytorch as DMP
 from DataLoaderGiant import DataLoaderGiant
 from datetime import date
-import os 
+import os
+import logging
 global queryCounter #keep track of the numbers of queries used in the adaptive black-box attack, just for record keeping
 
 #Set up logger
@@ -31,7 +32,7 @@ def AdaptiveAttack(saveTag, device, oracle, syntheticModel, numIterations, epoch
     #Place to save the results 
     os.chdir(saveDir)
 
-    # resultsTextFile = open(experimentDateAndName+", Results.txt","a+")
+    resultsTextFile = open(experimentDateAndName+", Results.txt","a+")
     logger.info('Name of the exp with data {}'.format(experimentDateAndName))
     #Reset the query counter 
     global queryCounter
@@ -62,10 +63,10 @@ def AdaptiveAttack(saveTag, device, oracle, syntheticModel, numIterations, epoch
     logger.info("Robust Acc MIM: {}".format(robustAccMIM))
     logger.info("Queries used: {}".format(queryCounter))
     #Write the results to text file 
-    # resultsTextFile.write("Clean Accuracy:"+str(cleanAcc)+"\n")
-    # resultsTextFile.write("MIM Robust Accuracy:"+str(robustAccMIM)+"\n")
-    # resultsTextFile.write("Queries used:"+str(queryCounter)+"\n")
-    # resultsTextFile.close() #Close the results file at the end 
+    resultsTextFile.write("Clean Accuracy:"+str(cleanAcc)+"\n")
+    resultsTextFile.write("MIM Robust Accuracy:"+str(robustAccMIM)+"\n")
+    resultsTextFile.write("Queries used:"+str(queryCounter)+"\n")
+    resultsTextFile.close() #Close the results file at the end 
 
     os.chdir("..") #move up one directory to return to original directory 
 
