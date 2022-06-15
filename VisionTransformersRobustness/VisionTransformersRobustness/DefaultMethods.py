@@ -58,9 +58,9 @@ def LoadShuffleDefenseAndCIFAR10(vis=False):
     #Load the CIFAR-10 data
     valLoader = DMP.GetCIFAR10Validation(imgSize, batchSize)
     data_inputs, data_labels = next(iter(valLoader))
-    logger.info('Sucessfully load the validation data. Print basic info of the first batch')
-    logger.info('Data inputs {}'.format(data_inputs.shape))
-    logger.info('Data labels {}'.format(data_labels.shape))
+    logger.info('LoadShuffleDefenseAndCIFAR10 :: Sucessfully load the validation data. Print basic info of the first batch')
+    logger.info('LoadShuffleDefenseAndCIFAR10 :: Data inputs {}'.format(data_inputs.shape))
+    logger.info('LoadShuffleDefenseAndCIFAR10 :: Data labels {}'.format(data_labels.shape))
 
     #Save some input for debugging if necessary
 
@@ -76,7 +76,7 @@ def LoadShuffleDefenseAndCIFAR10(vis=False):
     #Wrap the model in the ModelPlus class
     modelPlusV = ModelPlus("ViT-L_16", model, device, imgSizeH=imgSize, imgSizeW=imgSize, batchSize=batchSize)
     modelPlusList.append(modelPlusV)
-    logger.info('Successfully load pre-train model {} to device'.format(dir, device))
+    logger.info('LoadShuffleDefenseAndCIFAR10:: Successfully load pre-train model {} to device'.format(dir, device))
 
     #Load the BiT-M-R101x3 (Big Transfer Model)
     dirB = "Models/BiT-M-R101x3-Run0.tar" #checkpoint
@@ -98,11 +98,11 @@ def LoadShuffleDefenseAndCIFAR10(vis=False):
     #Here we hard code the Big Transfer Model Plus class input size to 160x128 (what it was trained on)
     modelBig101Plus = ModelPlus("BiT-M-R101x3", modelB, device, imgSizeH=160, imgSizeW=128, batchSize=batchSize)
     modelPlusList.append(modelBig101Plus)
-    logger.info('Successfully load pre-train model {} to device'.format(dirB, device))
+    logger.info('LoadShuffleDefenseAndCIFAR10 :: Successfully load pre-train model {} to device'.format(dirB, device))
     
     #Now time to build the defense 
     defense = ShuffleDefense.ShuffleDefense(modelPlusList, numClasses)
-    logger.info('Successfully create a ShuffleDefense object')
+    logger.info('LoadShuffleDefenseAndCIFAR10 :: Successfully create a ShuffleDefense object')
 
     return valLoader, defense
 
@@ -227,7 +227,7 @@ def AdaptiveAttackVisionTransformer():
 def AdaptiveAttackShuffleDefense():
     #Corresponding tag for saving files
     #First part indicates the type of defense, second part indidcates the synthetic model and last part indicates the strenght of the attack (100%)
-    saveTag = "ViT-L-16, ViT-32(ImageNet21K), p100" 
+    saveTag = "Adaptive_Attack_Defense_ViT-L-16, ViT-32(ImageNet21K), p100" 
     device = torch.device("cuda")
     logger.info("Device {}".format(device))
 
@@ -236,32 +236,50 @@ def AdaptiveAttackShuffleDefense():
     epsForAttacks = 0.031
     clipMin = 0.0 
     clipMax = 1.0
+
     #Parameters of training the synthetic model 
     imgSize = 224
     batchSize = 32
     numClasses = 10
-    numIterations = 4
+    numIterations = 1 #4
     epochsPerIteration = 1 #10
     epsForAug = 0.1 #when generating synthetic data, this value is eps for FGSM used to generate synthetic data
-    learningRate = (3e-2) / 2 #Learning rate of the synthetic model 
+    learningRate = (3e-2) / 2 #Learning rate of the synthetic model
+
     #Load the training dataset, validation dataset and the defense 
     valLoader, defense = LoadShuffleDefenseAndCIFAR10()
+    logger.info('AdaptiveAttackShuffleDefense :: Sucessfully load the ensemble defense. Print basic info of the first batch')
+
     trainLoader = DMP.GetCIFAR10Training(imgSize, batchSize)
+    logger.info('AdaptiveAttackShuffleDefense :: Sucessfully load the train data. Print basic info of the first batch')
+    logger.info('AdaptiveAttackShuffleDefense :: Data inputs {}'.format(data_inputs.shape))
+    logger.info('AdaptiveAttackShuffleDefense :: Data labels {}'.format(data_labels.shape))
+
     #Get the clean data 
     xTest, yTest = DMP.DataLoaderToTensor(valLoader)
     cleanLoader = DMP.GetCorrectlyIdentifiedSamplesBalancedDefense(defense, numAttackSamples, valLoader, numClasses)
+
+    logger.info('AdaptiveAttackShuffleDefense :: Sucessfully generate clean examples that are correctly classified by BOTH models. Print basic info of the first batch')
+    logger.info('AdaptiveAttackShuffleDefense :: Data inputs {}'.format(data_inputs.shape))
+    logger.info('AdaptiveAttackShuffleDefense :: Data labels {}'.format(data_labels.shape))
+
     #Create the synthetic model 
     syntheticDir = "Models//imagenet21k_ViT-B_32.npz"
     config = CONFIGS["ViT-B_32"]
     syntheticModel = VisionTransformer(config, imgSize, zero_head=True, num_classes=numClasses)
     syntheticModel.load_from(numpy.load(syntheticDir))  
     syntheticModel.to(device)
+    logger.info('AdaptiveAttackShuffleDefense :: Successfully load pre-train model {} to device'.format(syntheticDir, device))
+
     #Do the attack 
     oracle = defense
     dataLoaderForTraining = trainLoader
     optimizerName = "sgd"
     #Last line does the attack 
-    AttackWrappersAdaptiveBlackBox.AdaptiveAttack(saveTag, device, oracle, syntheticModel, numIterations, epochsPerIteration, epsForAug, learningRate, optimizerName, dataLoaderForTraining, cleanLoader, numClasses, epsForAttacks, clipMin, clipMax)
+    AttackWrappersAdaptiveBlackBox.AdaptiveAttack(saveTag, device, oracle, syntheticModel, 
+                                                    numIterations, epochsPerIteration, epsForAug, 
+                                                    learningRate, optimizerName, dataLoaderForTraining, 
+                                                    cleanLoader, numClasses, epsForAttacks, clipMin, clipMax)
 
 #Run the Self-Attention Gradient Attack (SAGA) on ViT-L and BiT-M-R101x3
 def SelfAttentionGradientAttackCIFAR10():
