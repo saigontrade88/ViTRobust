@@ -31,7 +31,8 @@ def AdaptiveAttack(saveTag, device, oracle, syntheticModel, numIterations, epoch
     #Place to save the results 
     os.chdir(saveDir)
 
-    resultsTextFile = open(experimentDateAndName+", Results.txt","a+")
+    # resultsTextFile = open(experimentDateAndName+", Results.txt","a+")
+    logger.info('Name of the exp with data {}'.format(experimentDateAndName))
     #Reset the query counter 
     global queryCounter
     queryCounter = 0
@@ -41,7 +42,7 @@ def AdaptiveAttack(saveTag, device, oracle, syntheticModel, numIterations, epoch
                         numIterations, epochsPerIteration, epsForAug, 
                         learningRate, optimizerName, dataLoaderForTraining, 
                         numClasses, clipMin, clipMax)
-
+    logger.info('Save the trained syntheticModel.')
     torch.save(syntheticModel, saveDir+"//SyntheticModel")
 
     #Next run the attack 
@@ -57,14 +58,14 @@ def AdaptiveAttack(saveTag, device, oracle, syntheticModel, numIterations, epoch
     cleanAcc = oracle.validateD(valLoader)
     robustAccMIM = oracle.validateD(advLoaderMIM)
 
-    print("Clean Acc:", cleanAcc)
-    print("Robust Acc MIM:", robustAccMIM)
-    print("Queries used:", queryCounter)
+    logger.info("Clean Acc: {}".format(cleanAcc))
+    logger.info("Robust Acc MIM: {}".format(robustAccMIM))
+    logger.info("Queries used: {}".format(queryCounter))
     #Write the results to text file 
-    resultsTextFile.write("Clean Accuracy:"+str(cleanAcc)+"\n")
-    resultsTextFile.write("MIM Robust Accuracy:"+str(robustAccMIM)+"\n")
-    resultsTextFile.write("Queries used:"+str(queryCounter)+"\n")
-    resultsTextFile.close() #Close the results file at the end 
+    # resultsTextFile.write("Clean Accuracy:"+str(cleanAcc)+"\n")
+    # resultsTextFile.write("MIM Robust Accuracy:"+str(robustAccMIM)+"\n")
+    # resultsTextFile.write("Queries used:"+str(queryCounter)+"\n")
+    # resultsTextFile.close() #Close the results file at the end 
 
     os.chdir("..") #move up one directory to return to original directory 
 
