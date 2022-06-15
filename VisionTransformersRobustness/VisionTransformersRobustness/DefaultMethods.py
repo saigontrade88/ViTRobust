@@ -14,7 +14,8 @@ from collections import OrderedDict
 import logging
 
 #Set up logger
-logging.basicConfig(level=logging.INFO,
+logging.basicConfig(filename='info.log',
+                    level=logging.INFO,
                     format='%(asctime)s.%(msecs)03d %(levelname)-6s %(name)s :: %(message)s',
                     datefmt='%Y-%m-%d %H:%M:%S')
 logger = logging.getLogger(__name__)
@@ -105,7 +106,7 @@ def LoadShuffleDefenseAndCIFAR10(vis=False):
 
     return valLoader, defense
 
-#Method to do the RayS attack on a single Vision Transformers
+#Method to do the RayS attack - query based blackbox attack on a single Vision Transformers
 def RaySAttackVisionTransformer():
     #Load the model and dataset
     logger.info('Load the model (model architecture and model weights), dataset, and model evaluation')
@@ -163,7 +164,7 @@ def RaySAttackShuffleDefense():
     logger.info("Robust acc: {}".format(robustAcc))
     logger.info("Clean acc: {}".format(cleanAcc))
 
-#Run the 100% strength adaptive attack on ViT-L-16
+#Run the 100% strength adaptive attack on ViT-L-16, transfer based blackbox attack
 def AdaptiveAttackVisionTransformer():
     #Corresponding tag for saving files
     #First part indicates the type of defense, second part indidcates the synthetic model and last part indicates the strenght of the attack (100%)
@@ -180,28 +181,47 @@ def AdaptiveAttackVisionTransformer():
     imgSize = 224
     batchSize = 32
     numClasses = 10
-    numIterations = 4
+    numIterations = 1 # 4
     epochsPerIteration = 1 #1 
     epsForAug = 0.1 #when generating synthetic data, this value is eps for FGSM used to generate synthetic data
     learningRate = (3e-2) / 2 #Learning rate of the synthetic model 
     #Load the training dataset, validation dataset and the defense 
     valLoader, defense = LoadViTLAndCIFAR10()
+
     trainLoader = DMP.GetCIFAR10Training(imgSize, batchSize)
+    data_inputs, data_labels = next(iter(trainLoader))
+    logger.info('Sucessfully load the train data. Print basic info of the first batch')
+    logger.info('Data inputs {}'.format(data_inputs.shape))
+    logger.info('Data labels {}'.format(data_labels.shape))
+
     #Get the clean data 
     xTest, yTest = DMP.DataLoaderToTensor(valLoader)
+
+    #Clean validation loader
     cleanLoader = DMP.GetCorrectlyIdentifiedSamplesBalancedDefense(defense, numAttackSamples, valLoader, numClasses)
-    #Create the synthetic model 
+    data_inputs, data_labels = next(iter(cleanLoader))
+    logger.info('Sucessfully generate clean examples that are correctly classified by BOTH models. Print basic info of the first batch')
+    logger.info('Data inputs {}'.format(data_inputs.shape))
+    logger.info('Data labels {}'.format(data_labels.shape))
+
+
+    #Create the synthetic model to generate adversarial examples
     syntheticDir = "Models//imagenet21k_ViT-B_32.npz" #imagenet21k_ViT-B_32.npz
     config = CONFIGS["ViT-B_32"]
     syntheticModel = VisionTransformer(config, imgSize, zero_head=True, num_classes=numClasses)
     syntheticModel.load_from(numpy.load(syntheticDir))  
     syntheticModel.to(device)
+    logger.info('Successfully load pre-train model {} to device'.format(syntheticDir, device))
+
     #Do the attack 
     oracle = defense
     dataLoaderForTraining = trainLoader
     optimizerName = "sgd"
     #Last line does the attack 
-    AttackWrappersAdaptiveBlackBox.AdaptiveAttack(saveTag, device, oracle, syntheticModel, numIterations, epochsPerIteration, epsForAug, learningRate, optimizerName, dataLoaderForTraining, cleanLoader, numClasses, epsForAttacks, clipMin, clipMax)
+    AttackWrappersAdaptiveBlackBox.AdaptiveAttack(saveTag, device, oracle, syntheticModel, 
+                                            numIterations, epochsPerIteration, epsForAug, 
+                                            learningRate, optimizerName, dataLoaderForTraining, 
+                                            cleanLoader, numClasses, epsForAttacks, clipMin, clipMax)
 
 #Run the 100% strength adaptive attack on shuffle defense
 def AdaptiveAttackShuffleDefense():
