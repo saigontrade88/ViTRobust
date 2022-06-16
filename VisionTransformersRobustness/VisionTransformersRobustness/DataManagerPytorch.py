@@ -6,10 +6,10 @@ import random
 import logging
 
 #Set up logger
-logging.basicConfig(level=logging.INFO,
-                    format='%(asctime)s.%(msecs)03d %(levelname)-6s %(name)s :: %(message)s',
-                    datefmt='%Y-%m-%d %H:%M:%S')
-logger = logging.getLogger(__name__)
+# logging.basicConfig(level=logging.INFO,
+#                     format='%(asctime)s.%(msecs)03d %(levelname)-6s %(name)s :: %(message)s',
+#                     datefmt='%Y-%m-%d %H:%M:%S')
+# logger = logging.getLogger(__name__)
 
 #Class to help with converting between dataloader and pytorch tensor 
 class MyDataSet(torch.utils.data.Dataset):
@@ -52,7 +52,7 @@ def validateD(valLoader, model, device=None):
                 if output[j].argmax(axis=0) == target[j]:
                     acc = acc +1
     acc = acc / float(len(valLoader.dataset))
-    logger.info('Accuracy of the model: {}'.format(100.0 * acc))
+    print('DataManagerPytorch::Accuracy of the model: {}'.format(100.0 * acc))
 
     return acc
 
@@ -84,7 +84,7 @@ def validateT(xData, yData, model, batchSize=None):
                 modelOutputIndex = modelOutputIndex + 1 #update the output index regardless
     #Do final averaging and return 
     acc = acc / numSamples
-    logger.info('Accuracy of the model: {}'.format(100.0 * acc))
+    print('DataManagerPytorch::Accuracy of the model: {}'.format(100.0 * acc))
     return acc
 
 #Input a dataloader and model
@@ -102,7 +102,7 @@ def validateDA(valLoader, model, device=None):
         for i, (input, target) in enumerate(valLoader):
             sampleSize = input.shape[0] #Get the number of samples used in each batch
             batchTracker = batchTracker + sampleSize
-            print("Processing up to sample=", batchTracker)
+            # print("DataManagerPytorch::Processing up to sample=", batchTracker)
             if device == None: #assume CUDA by default
                 inputVar = input.cuda()
             else:
@@ -118,7 +118,7 @@ def validateDA(valLoader, model, device=None):
                 indexer = indexer + 1 #update the indexer regardless 
     accuracy = accuracy/numSamples
     # print("Accuracy:", accuracy)
-    logger.info('Accuracy of the model: {}'.format(100.0 * accuracy))
+    print('DataManagerPytorch::Accuracy of the model: {}'.format(100.0 * accuracy))
     return accuracyArray
 
 #Replicate TF's predict method behavior 
@@ -235,7 +235,7 @@ def GetCIFAR10Validation(imgSize = 32, batchSize=128):
     val_dataset = datasets.CIFAR10(root='./data', train=False, download=True, transform=transformTest)
 
     val_dataset, _ = torch.utils.data.random_split(val_dataset, [1000, 9000])
-    logger.info('Val dataset length {}'.format(len(val_dataset)))
+    print('DataManagerPytorch::Val dataset length {}'.format(len(val_dataset)))
     valLoader = torch.utils.data.DataLoader(val_dataset, batch_size=batchSize, shuffle=False, num_workers=1, pin_memory=True)
     return valLoader
 
@@ -249,7 +249,7 @@ def GetCIFAR10Training(imgSize = 32, batchSize=128):
     train_dataset = datasets.CIFAR10(root='./data', train=True, download=True, transform=toTensorTransform)
 
     train_dataset, _= torch.utils.data.random_split(train_dataset, [1000, 49000])
-    logger.info('Train dataset length {}'.format(len(train_dataset)))
+    print('DataManagerPytorch::Train dataset length {}'.format(len(train_dataset)))
 
     trainLoader = torch.utils.data.DataLoader(train_dataset, batch_size=batchSize, shuffle=False, num_workers=1, pin_memory=True)
     return trainLoader
