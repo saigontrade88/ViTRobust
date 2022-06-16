@@ -5,12 +5,12 @@
 #SBATCH --cpus-per-task=3
 #SBATCH --gres=gpu:1
 #SBATCH --mem=120G
-#SBATCH --time=5:00:00
+#SBATCH --time=10:00:00
 #SBATCH --mail-user=longdang@usf.edu
 #SBATCH --mail-type=END,FAIL,REQUEUE
 #SBATCH --partition=snsm_itn19  
 #SBATCH --qos=snsm19_special
-#SBATCH --array=0-2
+#SBATCH --array=0-3
 
 source $HOME/.bashrc
 
@@ -21,7 +21,7 @@ conda activate torch_171
 
 echo "CUDA_VISIBLE_DEVICES=$CUDA_VISIBLE_DEVICES"
 
-METHODS=(1 2 3)
+METHODS=(0 1 2 3)
 echo "JOBID: $SLURM_JOB_ID"
 echo "METHOD: ${METHODS[$SLURM_ARRAY_TASK_ID]}"
 
