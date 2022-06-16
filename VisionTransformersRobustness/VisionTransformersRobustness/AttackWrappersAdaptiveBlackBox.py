@@ -33,7 +33,7 @@ def AdaptiveAttack(saveTag, device, oracle, syntheticModel, numIterations, epoch
     os.chdir(saveDir)
 
     resultsTextFile = open(experimentDateAndName+", Results.txt","a+")
-    logger.info('Name of the exp with data {}'.format(experimentDateAndName))
+    print('AttackWrappersAdaptiveAttack::AdaptiveAttack::Name of the exp with data {}'.format(experimentDateAndName))
     #Reset the query counter 
     global queryCounter
     queryCounter = 0
@@ -43,7 +43,7 @@ def AdaptiveAttack(saveTag, device, oracle, syntheticModel, numIterations, epoch
                         numIterations, epochsPerIteration, epsForAug, 
                         learningRate, optimizerName, dataLoaderForTraining, 
                         numClasses, clipMin, clipMax)
-    logger.info('Save the trained syntheticModel.')
+    print('AttackWrappersAdaptiveAttack::AdaptiveAttack::Save the trained syntheticModel.')
     torch.save(syntheticModel, saveDir+"//SyntheticModel")
 
     #Next run the attack 
@@ -59,9 +59,9 @@ def AdaptiveAttack(saveTag, device, oracle, syntheticModel, numIterations, epoch
     cleanAcc = oracle.validateD(valLoader)
     robustAccMIM = oracle.validateD(advLoaderMIM)
 
-    logger.info("Clean Acc: {}".format(cleanAcc))
-    logger.info("Robust Acc MIM: {}".format(robustAccMIM))
-    logger.info("Queries used: {}".format(queryCounter))
+    print("AttackWrappersAdaptiveAttack::AdaptiveAttack::Clean Acc: {}".format(cleanAcc))
+    print("AttackWrappersAdaptiveAttack::AdaptiveAttack::Robust Acc MIM: {}".format(robustAccMIM))
+    print("AttackWrappersAdaptiveAttack::AdaptiveAttack::Queries used: {}".format(queryCounter))
     #Write the results to text file 
     resultsTextFile.write("Clean Accuracy:"+str(cleanAcc)+"\n")
     resultsTextFile.write("MIM Robust Accuracy:"+str(robustAccMIM)+"\n")
@@ -114,7 +114,7 @@ def TrainSyntheticModel(saveDir, device, oracle, syntheticModel, numIterations, 
         print("Running synthetic model training iteration =", i)
         #Create the synthetic data using FGSM and the synthetic model 
         numDataLoaders = giantDataLoader.GetNumberOfLoaders() #Find out how many loaders we have to iterate over
-        logger.info('TrainSyntheticModel :: Number of data loaders {}'.format(numDataLoaders))
+        print('TrainSyntheticModel :: Number of data loaders {}'.format(numDataLoaders))
 
         #Go through and generate adversarial examples for each dataloader
         print("=Step 0: Generating data loaders...")
@@ -142,7 +142,7 @@ def TrainingStep(device, model, giantDataLoader, numEpochs, criterion, optimizer
     #switch into training mode 
     model.train()
     numDataLoaders = giantDataLoader.GetNumberOfLoaders() #Find out how many loaders we have to iterate over
-    logger.info('TrainingStep :: Number of data loaders {}'.format(numDataLoaders))
+    print('TrainingStep :: Number of data loaders {}'.format(numDataLoaders))
     #training loop
     for e in range(0, numEpochs):
         print("--Epoch=", e)
