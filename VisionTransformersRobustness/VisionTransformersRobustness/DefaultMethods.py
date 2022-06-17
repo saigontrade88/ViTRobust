@@ -33,6 +33,25 @@ import logging
 #                     datefmt='%Y-%m-%d %H:%M:%S')
 # logger = logging.getLogger(__name__)
 
+#Save a dataloader to the directory 
+def SaveLoader(dataLoaderPathX, dataLoaderPathY, dataLoader):
+    #Torch limits the amount of data we can save to disk so we must use numpy to save 
+    #torch.save(dataLoader, self.homeDir+dataLoaderName)
+    #First convert the tensor to a dataloader 
+    xDataPytorch, yDataPytorch = DMP.DataLoaderToTensor(dataLoader)
+    #Second conver the pytorch arrays to numpy arrays for saving 
+    xDataNumpy = xDataPytorch.cpu().detach().numpy()
+    yDataNumpy = yDataPytorch.cpu().detach().numpy()
+    #Save the data using numpy
+    numpy.save(dataLoaderPathX, xDataNumpy)
+    numpy.save(dataLoaderPathY, yDataNumpy)
+    
+    #Delete the dataloader and associated variables from memory 
+    del dataLoader
+    del xDataPytorch
+    del yDataPytorch
+    del xDataNumpy
+    del yDataNumpy
 def show_prediction(img, label, pred, K=5, adv_img=None, noise=None):
     class_names = ['airplane', 'automobile', 'bird', 'cat', 'deer',
                 'dog', 'frog', 'horse', 'ship', 'truck']  
@@ -146,7 +165,7 @@ def LoadViTLAndCIFAR10(xData, yData):
 
 #Load the shuffle defense containing ViT-L-16 and BiT-M-R101x3
 #For all attacks except SAGA, vis should be false (makes the Vision tranformer return the attention weights if true)
-def LoadShuffleDefenseAndCIFAR10(vis=False, xData, yData):
+def LoadShuffleDefenseAndCIFAR10( xData, yData, vis=False):
     modelPlusList = []
     #Basic variable and data setup
     device = torch.device("cuda")
@@ -217,7 +236,7 @@ def LoadShuffleDefenseAndCIFAR10(vis=False, xData, yData):
     return valLoader, defense
 
 #Method to do the RayS attack - query based blackbox attack on a single Vision Transformers
-def RaySAttackVisionTransformer(xValData, yValData, xCleanData, yCleanData, qLimit):
+def RaySAttackVisionTransformer(xValData, yValData, qLimit, xCleanData, yCleanData):
     #Load the model and dataset
     saveTag = 'RaySAttack'
     start_time = datetime.now() 
@@ -298,7 +317,11 @@ def RaySAttackVisionTransformer(xValData, yValData, xCleanData, yCleanData, qLim
                           5, 
                           adv_exmp_batch[i], 
                           None)
-
+        #Save the adversarial examples
+        tag = start_time.strftime('%Y-%m-%d-%H-%M-%S'))
+        dataLoaderPathX = 'data/0_RayS_Attack/advLoader_X_{}'.format(tag)
+        dataLoaderPathY = 'data/0_RayS_Attack/advLoader_Y_{}'.format(tag)
+        SaveLoader(dataLoaderPathX, dataLoaderPathY, advLoader):
         now = datetime.now()
         wf.write("Complete at {}".format(now.strftime('%Y-%m-%d %H:%M:%S')))
         wf.write("--- {} seconds ---".format(now - start_time))
@@ -306,7 +329,7 @@ def RaySAttackVisionTransformer(xValData, yValData, xCleanData, yCleanData, qLim
         sys.stdout.flush()
 
 #Here we do the RayS attack on a shuffle defense comprised of two models, ViT-L-16 and BiT-M-R101x3
-def RaySAttackShuffleDefense():
+def RaySAttackShuffleDefense(xValData, yValData, qLimit, xCleanData, yCleanData):
     #Load the model and dataset
     saveTag = 'RaySAttackShuffleDefense'
     start_time = datetime.now()
@@ -316,11 +339,36 @@ def RaySAttackShuffleDefense():
         
         wf.write("Begin at {}".format(start_time.strftime('%Y-%m-%d %H:%M:%S')))
         #Load the model and dataset
-        valLoader, defense = LoadShuffleDefenseAndCIFAR10()
+        valLoader, defense = LoadShuffleDefenseAndCIFAR10(xData, yData)
         #Get the clean samples
         numClasses = 10
-        attackSampleNum = 1000 #1000
-        cleanLoader = DMP.GetCorrectlyIdentifiedSamplesBalancedDefense(defense, attackSampleNum, valLoader, numClasses)
+        attackSampleNum = 100 #1000
+        #Only attack correctly classified examples
+        if xCleanData and yCleanData:
+            print('Default_Methods::RaySAttackShuffleDefense :: Load correctly classified examples from file at {}'.format(xCleanData))
+            xData = numpy.load(xCleanData)
+            yData = numpy.load(yCleanData)
+            cleanLoader = DMP.TensorToDataLoader(torch.from_numpy(xCleanData), 
+                                            torch.from_numpy(yCleanData), 
+                                            transforms = None, 
+                                            batchSize = valLoader.batch_size, 
+                                            randomizer = None)
+        else:
+            cleanLoader = DMP.GetCorrectlyIdentifiedSamplesBalancedDefense(defense, 
+                                                                attackSampleNum, 
+                                                                valLoader, 
+                                                                numClasses)
+            saveDir = os.path.join(os.getcwd(), 'ViT-BiT-cleanLoader')
+            if not os.path.isdir(saveDir): #If not there, make the directory 
+              os.makedirs(saveDir)
+            #First convert the tensor to a dataloader 
+            xDataPytorch, yDataPytorch = DMP.DataLoaderToTensor(cleanLoader)
+            #Second conver the pytorch arrays to numpy arrays for saving 
+            xDataNumpy = xDataPytorch.cpu().detach().numpy()
+            yDataNumpy = yDataPytorch.cpu().detach().numpy()
+            #Save the data using numpy
+            numpy.save("{}/cleanLoader_X".format(saveDir), xDataNumpy)
+            numpy.save("{}/cleanLoader_Y".format(saveDir), yDataNumpy)
 
         data_inputs, data_labels = next(iter(cleanLoader))
         print('Default_Methods::RaySAttackShuffleDefense :: Sucessfully generate clean examples that are correctly classified by BOTH models. Print basic info of the first batch')
@@ -329,7 +377,7 @@ def RaySAttackShuffleDefense():
 
         #Set the attack parameters 
         epsMax = 0.031
-        queryLimit = 10000 #10000
+        queryLimit = qLimit #10000
         #The next line does the actual attack on the defense 
         begin = datetime.now()
         wf.write("Begin attack at {}".format(begin.strftime('%Y-%m-%d %H:%M:%S')))
