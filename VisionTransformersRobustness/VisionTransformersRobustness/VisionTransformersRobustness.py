@@ -35,7 +35,7 @@ def main(myInt):
     if myInt == 0:
         #Uncomment next line to do the RayS attack on the Vision Transformer, ViT-L-16
         # RaySAttackVisionTransformer(xValData, yValData, xCleanData, yCleanData)
-        DefaultMethods.RaySAttackVisionTransformer(xVal, yVal, xClean, yClean, qLimit)
+        DefaultMethods.RaySAttackVisionTransformer(xVal, yVal, qLimit, xClean, yClean)
 
     elif myInt == 1:
         #Uncomment next line to do the RayS attack on the Shuffle Defense (ViT-L-16 and BiT-M-R101x3)
