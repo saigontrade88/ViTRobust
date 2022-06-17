@@ -32,6 +32,7 @@ def validateD(valLoader, model, device=None):
     #switch to evaluate mode
     model.eval()
     acc = 0 #true prediction
+    tp_5 = 0 #Top 5 accuracy
     batchTracker = 0
     #deactivate the computation graph and no gradient calculation for the following code.
     with torch.no_grad():
@@ -46,15 +47,21 @@ def validateD(valLoader, model, device=None):
                 inputVar = input.to(device)
             #prediction
             output = model(inputVar)
-            output = output.float()
+            output = output.float() #Tensor
             #Go through and check how many samples correctly identified
             for j in range(0, sampleSize):
                 if output[j].argmax(axis=0) == target[j]:
                     acc = acc +1
-    acc = acc / float(len(valLoader.dataset))
-    print('DataManagerPytorch::Accuracy of the model: {}'.format(100.0 * acc))
+                if (output[j].topk(5, axis=0)[1] == target[j]).any():
+                    tp_5 = tp_5 +1
 
-    return acc
+    acc = acc / float(len(valLoader.dataset))
+    tp_5 = tp_5 / float(len(valLoader.dataset))
+
+    print('DataManagerPytorch::Accuracy of the model: {}'.format(100.0 * acc))
+    print(f"DataManagerPytorch::Top-5 error: {(100.0 * (1 - tp_5)):4.2f}%")
+
+    return acc, tp_5
 
 #Method to validate data using Pytorch tensor inputs and a Pytorch model 
 def validateT(xData, yData, model, batchSize=None):
@@ -234,7 +241,7 @@ def GetCIFAR10Validation(imgSize = 32, batchSize=128):
 
     val_dataset = datasets.CIFAR10(root='./data', train=False, download=True, transform=transformTest)
 
-    val_dataset, _ = torch.utils.data.random_split(val_dataset, [1000, 9000])
+    # val_dataset, _ = torch.utils.data.random_split(val_dataset, [1000, 5000])
     print('DataManagerPytorch::Val dataset length {}'.format(len(val_dataset)))
     valLoader = torch.utils.data.DataLoader(val_dataset, batch_size=batchSize, shuffle=False, num_workers=1, pin_memory=True)
     return valLoader
@@ -248,7 +255,7 @@ def GetCIFAR10Training(imgSize = 32, batchSize=128):
 
     train_dataset = datasets.CIFAR10(root='./data', train=True, download=True, transform=toTensorTransform)
 
-    train_dataset, _= torch.utils.data.random_split(train_dataset, [1000, 49000])
+    # train_dataset, _= torch.utils.data.random_split(train_dataset, [1000, 49000])
     print('DataManagerPytorch::Train dataset length {}'.format(len(train_dataset)))
 
     trainLoader = torch.utils.data.DataLoader(train_dataset, batch_size=batchSize, shuffle=False, num_workers=1, pin_memory=True)
@@ -292,7 +299,10 @@ def GetCorrectlyIdentifiedSamplesBalanced(model, totalSamplesRequired, dataLoade
     cleanDataLoader = TensorToDataLoader(xCorrect, yCorrect, transforms = None, batchSize = dataLoader.batch_size, randomizer = None)
     return cleanDataLoader
 
-def GetCorrectlyIdentifiedSamplesBalancedDefense(defense, totalSamplesRequired, dataLoader, numClasses):
+def GetCorrectlyIdentifiedSamplesBalancedDefense(defense, 
+                                    totalSamplesRequired, 
+                                    dataLoader, 
+                                    numClasses):
     sampleShape = GetOutputShape(dataLoader)
     xData, yData = DataLoaderToTensor(dataLoader)
     #Basic error checking 
