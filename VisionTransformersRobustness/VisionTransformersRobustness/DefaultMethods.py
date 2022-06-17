@@ -13,6 +13,16 @@ from collections import OrderedDict
 from datetime import datetime
 import os
 import sys
+## Imports for plotting
+import matplotlib.pyplot as plt
+%matplotlib inline 
+from IPython.display import set_matplotlib_formats
+set_matplotlib_formats('svg', 'pdf') # For export
+from matplotlib.colors import to_rgb
+import matplotlib
+matplotlib.rcParams['lines.linewidth'] = 2.0
+import seaborn as sns
+sns.set()
 
 import logging
 
@@ -23,8 +33,84 @@ import logging
 #                     datefmt='%Y-%m-%d %H:%M:%S')
 # logger = logging.getLogger(__name__)
 
+def show_prediction(img, label, pred, K=5, adv_img=None, noise=None):
+    class_names = ['airplane', 'automobile', 'bird', 'cat', 'deer',
+                'dog', 'frog', 'horse', 'ship', 'truck']  
+    if isinstance(img, torch.Tensor):
+        # Tensor image to numpy
+        img = img.cpu().permute(1, 2, 0).numpy()
+        #img = (img * NORM_STD[None,None]) + NORM_MEAN[None,None]
+        img = np.clip(img, a_min=0.0, a_max=1.0)
+        label = label.item()
+    
+    # Plot on the left the image with the true label as title.
+    # On the right, have a horizontal bar plot with the top k predictions including probabilities
+    if noise is None and adv_img is None:
+        print('Case 1')
+        fig, ax = plt.subplots(1, 2, figsize=(15,2), gridspec_kw={'width_ratios': [1, 1]})
+    elif noise is None and adv_img is not None:
+        print('Case 2')
+        fig, ax = plt.subplots(1, 4, figsize=(15,2), 
+                               gridspec_kw={'width_ratios': [1, 1, 1, 2]})
+    else:
+        print('Case 3')
+        fig, ax = plt.subplots(1, 5, figsize=(15,2), gridspec_kw={'width_ratios': [1, 1, 1, 1, 2]})
+    
+    #Draw the clean image
+    ax[0].imshow(img)
+    ax[0].set_title(class_names[label])
+    ax[0].axis('off')
+    
+    if adv_img is not None and noise is not None:
+        # Visualize adversarial images
+        adv_img = adv_img.cpu().permute(1, 2, 0).numpy()
+        #adv_img = (adv_img * NORM_STD[None,None]) + NORM_MEAN[None,None]
+        adv_img = np.clip(adv_img, a_min=0.0, a_max=1.0)
+        ax[1].imshow(adv_img)
+        ax[1].set_title('Adversarial')
+        ax[1].axis('off')
+        # Visualize noise
+        noise = noise.cpu().permute(1, 2, 0).numpy()
+        noise = noise * 0.5 + 0.5 # Scale between 0 to 1 
+        ax[2].imshow(noise)
+        ax[2].set_title('Noise')
+        ax[2].axis('off')
+        # buffer
+        ax[3].axis('off')
+    if adv_img is not None:
+        # Visualize adversarial images
+        adv_img = adv_img.cpu().permute(1, 2, 0).numpy()
+        #adv_img = (adv_img * NORM_STD[None,None]) + NORM_MEAN[None,None]
+        adv_img = np.clip(adv_img, a_min=0.0, a_max=1.0)
+        ax[1].imshow(adv_img)
+        ax[1].set_title('Adversarial')
+        ax[1].axis('off')
+        # # Visualize noise
+        ax[2].axis('off')
+        # # buffer
+        #ax[3].axis('off')
+    
+    if abs(pred.sum().item() - 1.0) > 1e-4:
+        pred = torch.softmax(pred, dim=-1)
+    topk_vals, topk_idx = pred.topk(K, dim=-1)
+    topk_vals, topk_idx = topk_vals.cpu().numpy(), topk_idx.cpu().numpy()
+    ax[-1].barh(np.arange(K), topk_vals*100.0, align='center', color=["C0" if topk_idx[i]!=label else "C2" for i in range(K)])
+    ax[-1].set_yticks(np.arange(K))
+    ax[-1].set_yticklabels([class_names[c] for c in topk_idx])
+    ax[-1].invert_yaxis()
+    ax[-1].set_xlabel('Confidence')
+    ax[-1].set_title('Predictions')
+    
+    #plt.show()
+    if adv_img is not None:
+      print('Save adversarial images')
+      plt.savefig('adv_img_{}.pdf'.format(class_names[label]), bbox_inches='tight')
+    else:
+      plt.savefig('clean_img_{}.pdf'.format(class_names[label]), bbox_inches='tight')
+    plt.close()
+
 #Load the ViT-L-16 and CIFAR-10 dataset 
-def LoadViTLAndCIFAR10():
+def LoadViTLAndCIFAR10(xData, yData):
     #Basic variable and data setup
     device = torch.device("cuda")
     print("Device {}".format(device))
@@ -32,8 +118,18 @@ def LoadViTLAndCIFAR10():
     imgSize = 224
     batchSize = 8
     #Load the CIFAR-10 data
-    print('Default_Methods::Load the CIFAR-10 data')
-    valLoader = DMP.GetCIFAR10Validation(imgSize, batchSize)
+    if xData and yData:
+        print('Default_Methods::LoadViTLAndCIFAR10 :: Load data from file at {}'.format(xData))
+        xData = numpy.load(xData)
+        yData = numpy.load(yData)
+        valLoader = DMP.TensorToDataLoader(torch.from_numpy(xData), 
+                                        torch.from_numpy(yData), 
+                                        transforms = None, 
+                                        batchSize = batchSize, 
+                                        randomizer = None)
+    else:
+        valLoader = DMP.GetCIFAR10Validation(imgSize, batchSize)
+
     #Load ViT-L-16
     config = CONFIGS["ViT-L_16"]
     model = VisionTransformer(config, imgSize, zero_head=True, num_classes=numClasses)
@@ -50,7 +146,7 @@ def LoadViTLAndCIFAR10():
 
 #Load the shuffle defense containing ViT-L-16 and BiT-M-R101x3
 #For all attacks except SAGA, vis should be false (makes the Vision tranformer return the attention weights if true)
-def LoadShuffleDefenseAndCIFAR10(vis=False):
+def LoadShuffleDefenseAndCIFAR10(vis=False, xData, yData):
     modelPlusList = []
     #Basic variable and data setup
     device = torch.device("cuda")
@@ -59,7 +155,18 @@ def LoadShuffleDefenseAndCIFAR10(vis=False):
     imgSize = 224
     batchSize = 8 
     #Load the CIFAR-10 data
-    valLoader = DMP.GetCIFAR10Validation(imgSize, batchSize)
+    if xData and yData:
+        print('Default_Methods::LoadShuffleDefenseAndCIFAR10 :: Load data from file at {}'.format(xData))
+        xData = numpy.load(xData)
+        yData = numpy.load(yData)
+        valLoader = DMP.TensorToDataLoader(torch.from_numpy(xData), 
+                                        torch.from_numpy(yData), 
+                                        transforms = None, 
+                                        batchSize = batchSize, 
+                                        randomizer = None)
+    else:
+        valLoader = DMP.GetCIFAR10Validation(imgSize, batchSize)
+
     data_inputs, data_labels = next(iter(valLoader))
     print('Default_Methods::LoadShuffleDefenseAndCIFAR10 :: Sucessfully load the validation data. Print basic info of the first batch')
     print('Default_Methods::LoadShuffleDefenseAndCIFAR10 :: Data inputs {}'.format(data_inputs.shape))
@@ -110,7 +217,7 @@ def LoadShuffleDefenseAndCIFAR10(vis=False):
     return valLoader, defense
 
 #Method to do the RayS attack - query based blackbox attack on a single Vision Transformers
-def RaySAttackVisionTransformer():
+def RaySAttackVisionTransformer(xValData, yValData, xCleanData, yCleanData, qLimit):
     #Load the model and dataset
     saveTag = 'RaySAttack'
     start_time = datetime.now() 
@@ -119,26 +226,50 @@ def RaySAttackVisionTransformer():
         
         wf.write("Begin at {}".format(start_time.strftime('%Y-%m-%d %H:%M:%S')))
         print('Default_Methods::RaySAttackVisionTransformer :: Load the model (model architecture and model weights), dataset, and model evaluation')
-        valLoader, defense = LoadViTLAndCIFAR10()
+        valLoader, defense = LoadViTLAndCIFAR10(xValData, yValData)
+
+        cleanAcc, tp_5 = defense.validateD(valLoader)
+        wf.write("RaySAttackVisionTransformer :: Before attack :: Clean acc:{}".format(cleanAcc))
+        wf.write("RaySAttackVisionTransformer :: Before attack :: Top-5 error:{}".format(tp_5))
+
         #Get the clean samples
         numClasses = 10
-        attackSampleNum = 1000 #1000
-        cleanLoader = DMP.GetCorrectlyIdentifiedSamplesBalancedDefense(defense, attackSampleNum, valLoader, numClasses)
+        attackSampleNum = 100 #1000
+        
+        #Only attack correctly classified examples
+        if xCleanData and yCleanData:
+            print('Default_Methods::RaySAttackVisionTransformer :: Load correctly classified examples from file at {}'.format(xCleanData))
+            xData = numpy.load(xCleanData)
+            yData = numpy.load(yCleanData)
+            cleanLoader = DMP.TensorToDataLoader(torch.from_numpy(xCleanData), 
+                                            torch.from_numpy(yCleanData), 
+                                            transforms = None, 
+                                            batchSize = valLoader.batch_size, 
+                                            randomizer = None)
+        else:
+            cleanLoader = DMP.GetCorrectlyIdentifiedSamplesBalancedDefense(defense, 
+                                                                attackSampleNum, 
+                                                                valLoader, 
+                                                                numClasses)
+
         #Set the attack parameters 
         epsMax = 0.031
-        queryLimit = 10000 #10000
+        queryLimit = qLimit #10000
 
         #The next line does the actual attack on the defense 
         begin = datetime.now()
         wf.write("Begin attack at {}".format(begin.strftime('%Y-%m-%d %H:%M:%S')))
-        advLoader = AttackWrappersRayS.RaySAttack(defense, epsMax, queryLimit, cleanLoader)
+        advLoader = AttackWrappersRayS.RaySAttack(defense, 
+                                            epsMax, 
+                                            queryLimit, 
+                                            cleanLoader)
         now = datetime.now()
         wf.write("Complete at {}".format(now.strftime('%Y-%m-%d %H:%M:%S')))
         wf.write("--- {} seconds ---".format(now - begin))
 
         #Check the results 
-        robustAcc = defense.validateD(advLoader)
-        cleanAcc = defense.validateD(valLoader)
+        robustAcc, tp_5_adv = defense.validateD(advLoader)
+        cleanAcc, tp_5 = defense.validateD(valLoader)
         #print the results 
         # print("RaySAttackVisionTransformer :: Queries used: {}".format(queryLimit))
         # print("RaySAttackVisionTransformer :: Robust acc: {}".format(robustAcc))
@@ -147,7 +278,26 @@ def RaySAttackVisionTransformer():
         #Print the results 
         wf.write("RaySAttackVisionTransformer :: Queries used:{}".format(queryLimit))
         wf.write("RaySAttackVisionTransformer :: Robust acc:{}".format(robustAcc))
+        wf.write("RaySAttackVisionTransformer :: Top-5 acc on adversarial images:{}".format(tp_5_adv))
         wf.write("RaySAttackVisionTransformer :: Clean acc:{}".format(cleanAcc))
+        wf.write("RaySAttackVisionTransformer :: Top-5 acc on clean images:{}".format(tp_5))
+
+        #Visualization
+        with torch.no_grad():
+            adv_preds = defense.predictD(advLoader, numClasses)
+
+        #Extract first batch of orig data
+        exmp_batch, label_batch = next(iter(cleanLoader))
+
+        #Extract first batch of adv data
+        adv_exmp_batch, adv_label_batch = next(iter(advLoader))
+        for i in range(valLoader.batch_size):
+            show_prediction(exmp_batch[i], 
+                          label_batch[i].int(), 
+                          adv_preds[i], 
+                          5, 
+                          adv_exmp_batch[i], 
+                          None)
 
         now = datetime.now()
         wf.write("Complete at {}".format(now.strftime('%Y-%m-%d %H:%M:%S')))
