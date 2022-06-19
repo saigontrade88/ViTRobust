@@ -5,3 +5,4 @@
 VisionTransformersRobustness/VisionTransformersRobustness/Results/Med_2_Adaptive_Attack/SyntheticModel
 *.zip
 VisionTransformersRobustness/VisionTransformersRobustness/Results/Med_2_Adaptive_Attack/AdvLoaderMIM
+*.out
