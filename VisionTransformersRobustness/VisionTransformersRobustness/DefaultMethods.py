@@ -1,6 +1,6 @@
 #In this file we provide different methods to run attacks on different models 
 import torch
-import numpy
+import numpy as np
 import ShuffleDefense
 from ModelPlus import ModelPlus
 import DataManagerPytorch as DMP
@@ -15,7 +15,7 @@ import os
 import sys
 ## Imports for plotting
 import matplotlib.pyplot as plt
-%matplotlib inline 
+ 
 from IPython.display import set_matplotlib_formats
 set_matplotlib_formats('svg', 'pdf') # For export
 from matplotlib.colors import to_rgb
@@ -34,7 +34,11 @@ import logging
 # logger = logging.getLogger(__name__)
 
 #Save a dataloader to the directory 
-def SaveLoader(dataLoaderPathX, dataLoaderPathY, dataLoader):
+def SaveLoader(filepath, timestamp, tag, dataLoader):
+
+    if not os.path.isdir(filepath): #If not there, make the directory 
+        os.makedirs(filepath)
+
     #Torch limits the amount of data we can save to disk so we must use numpy to save 
     #torch.save(dataLoader, self.homeDir+dataLoaderName)
     #First convert the tensor to a dataloader 
@@ -43,8 +47,12 @@ def SaveLoader(dataLoaderPathX, dataLoaderPathY, dataLoader):
     xDataNumpy = xDataPytorch.cpu().detach().numpy()
     yDataNumpy = yDataPytorch.cpu().detach().numpy()
     #Save the data using numpy
-    numpy.save(dataLoaderPathX, xDataNumpy)
-    numpy.save(dataLoaderPathY, yDataNumpy)
+
+    dataLoaderPathX = '{}/{}_X_{}'.format(filepath, tag, timestamp)
+    dataLoaderPathY = '{}/{}_Y_{}'.format(filepath, tag, timestamp)
+
+    np.save(dataLoaderPathX, xDataNumpy)
+    np.save(dataLoaderPathY, yDataNumpy)
     
     #Delete the dataloader and associated variables from memory 
     del dataLoader
@@ -52,7 +60,7 @@ def SaveLoader(dataLoaderPathX, dataLoaderPathY, dataLoader):
     del yDataPytorch
     del xDataNumpy
     del yDataNumpy
-def show_prediction(img, label, pred, K=5, adv_img=None, noise=None):
+def show_prediction(img, label, pred, filepath, timestamp, tag, K=5, adv_img=None, noise=None):
     class_names = ['airplane', 'automobile', 'bird', 'cat', 'deer',
                 'dog', 'frog', 'horse', 'ship', 'truck']  
     if isinstance(img, torch.Tensor):
@@ -66,14 +74,14 @@ def show_prediction(img, label, pred, K=5, adv_img=None, noise=None):
     # On the right, have a horizontal bar plot with the top k predictions including probabilities
     if noise is None and adv_img is None:
         print('Case 1')
-        fig, ax = plt.subplots(1, 2, figsize=(15,2), gridspec_kw={'width_ratios': [1, 1]})
+        fig, ax = plt.subplots(1, 2, figsize=(20,4), gridspec_kw={'width_ratios': [1, 1]})
     elif noise is None and adv_img is not None:
         print('Case 2')
-        fig, ax = plt.subplots(1, 4, figsize=(15,2), 
+        fig, ax = plt.subplots(1, 4, figsize=(20,4), 
                                gridspec_kw={'width_ratios': [1, 1, 1, 2]})
     else:
         print('Case 3')
-        fig, ax = plt.subplots(1, 5, figsize=(15,2), gridspec_kw={'width_ratios': [1, 1, 1, 1, 2]})
+        fig, ax = plt.subplots(1, 5, figsize=(20,4), gridspec_kw={'width_ratios': [1, 1, 1, 1, 2]})
     
     #Draw the clean image
     ax[0].imshow(img)
@@ -121,15 +129,19 @@ def show_prediction(img, label, pred, K=5, adv_img=None, noise=None):
     ax[-1].set_title('Predictions')
     
     #plt.show()
-    if adv_img is not None:
-      print('Save adversarial images')
-      plt.savefig('adv_img_{}.pdf'.format(class_names[label]), bbox_inches='tight')
+    if not os.path.isdir(filepath): #If not there, make the directory 
+        os.makedirs(filepath)
+    if tag == 'adv':
+        print('Save adversarial images')
+        filepath = '{}/adv_img_{}_{}.pdf'.format(filepath, class_names[label], timestamp)
+        plt.savefig(filepath)
     else:
-      plt.savefig('clean_img_{}.pdf'.format(class_names[label]), bbox_inches='tight')
+        filepath = '{}/clean_img_{}_{}.pdf'.format(filepath, class_names[label], timestamp)
+        plt.savefig(filepath)
     plt.close()
 
 #Load the ViT-L-16 and CIFAR-10 dataset 
-def LoadViTLAndCIFAR10(xData, yData):
+def LoadViTLAndCIFAR10(xData, yData, validSampleNum):
     #Basic variable and data setup
     device = torch.device("cuda")
     print("Device {}".format(device))
@@ -139,15 +151,15 @@ def LoadViTLAndCIFAR10(xData, yData):
     #Load the CIFAR-10 data
     if xData and yData:
         print('Default_Methods::LoadViTLAndCIFAR10 :: Load data from file at {}'.format(xData))
-        xData = numpy.load(xData)
-        yData = numpy.load(yData)
+        xData = np.load(xData)
+        yData = np.load(yData)
         valLoader = DMP.TensorToDataLoader(torch.from_numpy(xData), 
                                         torch.from_numpy(yData), 
                                         transforms = None, 
                                         batchSize = batchSize, 
                                         randomizer = None)
     else:
-        valLoader = DMP.GetCIFAR10Validation(imgSize, batchSize)
+        valLoader = DMP.GetCIFAR10Validation(validSampleNum, imgSize, batchSize)
 
     #Load ViT-L-16
     config = CONFIGS["ViT-L_16"]
@@ -165,7 +177,7 @@ def LoadViTLAndCIFAR10(xData, yData):
 
 #Load the shuffle defense containing ViT-L-16 and BiT-M-R101x3
 #For all attacks except SAGA, vis should be false (makes the Vision tranformer return the attention weights if true)
-def LoadShuffleDefenseAndCIFAR10( xData, yData, vis=False):
+def LoadShuffleDefenseAndCIFAR10( xData, yData, validSampleNum, vis=False):
     modelPlusList = []
     #Basic variable and data setup
     device = torch.device("cuda")
@@ -176,15 +188,15 @@ def LoadShuffleDefenseAndCIFAR10( xData, yData, vis=False):
     #Load the CIFAR-10 data
     if xData and yData:
         print('Default_Methods::LoadShuffleDefenseAndCIFAR10 :: Load data from file at {}'.format(xData))
-        xData = numpy.load(xData)
-        yData = numpy.load(yData)
+        xData = np.load(xData)
+        yData = np.load(yData)
         valLoader = DMP.TensorToDataLoader(torch.from_numpy(xData), 
                                         torch.from_numpy(yData), 
                                         transforms = None, 
                                         batchSize = batchSize, 
                                         randomizer = None)
     else:
-        valLoader = DMP.GetCIFAR10Validation(imgSize, batchSize)
+        valLoader = DMP.GetCIFAR10Validation(validSampleNum, imgSize, batchSize)
 
     data_inputs, data_labels = next(iter(valLoader))
     print('Default_Methods::LoadShuffleDefenseAndCIFAR10 :: Sucessfully load the validation data. Print basic info of the first batch')
@@ -236,32 +248,35 @@ def LoadShuffleDefenseAndCIFAR10( xData, yData, vis=False):
     return valLoader, defense
 
 #Method to do the RayS attack - query based blackbox attack on a single Vision Transformers
-def RaySAttackVisionTransformer(xValData, yValData, qLimit, xCleanData, yCleanData):
+def RaySAttackVisionTransformer(xValData, yValData, 
+                                qLimit, attackSampleNum, 
+                                xCleanData, yCleanData,
+                                trainSampleNum, validSampleNum, savedFilePath):
     #Load the model and dataset
     saveTag = 'RaySAttack'
     start_time = datetime.now() 
     fileName = '{}_{}.txt'.format(saveTag, start_time)
     with open(fileName, 'a+') as wf:
         
-        wf.write("Begin at {}".format(start_time.strftime('%Y-%m-%d %H:%M:%S')))
-        print('Default_Methods::RaySAttackVisionTransformer :: Load the model (model architecture and model weights), dataset, and model evaluation')
-        valLoader, defense = LoadViTLAndCIFAR10(xValData, yValData)
+        wf.write("Begin at {}\n".format(start_time.strftime('%Y-%m-%d %H:%M:%S')))
+        print('Default_Methods::RaySAttackVisionTransformer :: Load the model (model architecture and model weights), dataset, and model evaluation\n')
+        valLoader, defense = LoadViTLAndCIFAR10(xValData, yValData, validSampleNum)
 
         cleanAcc, tp_5 = defense.validateD(valLoader)
-        wf.write("RaySAttackVisionTransformer :: Before attack :: Clean acc:{}".format(cleanAcc))
-        wf.write("RaySAttackVisionTransformer :: Before attack :: Top-5 error:{}".format(tp_5))
+        wf.write("RaySAttackVisionTransformer :: Before attack :: Clean acc:{}\n".format(cleanAcc))
+        wf.write("RaySAttackVisionTransformer :: Before attack :: Top-5 acc:{}\n".format(tp_5))
 
         #Get the clean samples
         numClasses = 10
-        attackSampleNum = 100 #1000
+        attackSampleNum = attackSampleNum #1000
         
         #Only attack correctly classified examples
         if xCleanData and yCleanData:
             print('Default_Methods::RaySAttackVisionTransformer :: Load correctly classified examples from file at {}'.format(xCleanData))
-            xData = numpy.load(xCleanData)
-            yData = numpy.load(yCleanData)
-            cleanLoader = DMP.TensorToDataLoader(torch.from_numpy(xCleanData), 
-                                            torch.from_numpy(yCleanData), 
+            xData = np.load(xCleanData)
+            yData = np.load(yCleanData)
+            cleanLoader = DMP.TensorToDataLoader(torch.from_numpy(xData), 
+                                            torch.from_numpy(yData), 
                                             transforms = None, 
                                             batchSize = valLoader.batch_size, 
                                             randomizer = None)
@@ -270,6 +285,19 @@ def RaySAttackVisionTransformer(xValData, yValData, qLimit, xCleanData, yCleanDa
                                                                 attackSampleNum, 
                                                                 valLoader, 
                                                                 numClasses)
+        
+            filepath = os.path.join(savedFilePath, 'ViT-BiT-cleanLoader')
+            
+            timestamp = start_time.strftime('%Y-%m-%d-%H-%M-%S')
+            
+            SaveLoader(filepath, timestamp, 'cleanLoader',cleanLoader)
+
+        data_inputs, data_labels = next(iter(cleanLoader))
+        print('Default_Methods::AdaptiveAttackVisionTransformer :: Sucessfully generate clean examples that are correctly classified by BOTH models. Print basic info of the first batch')
+        print('Default_Methods::AdaptiveAttackVisionTransformer :: Data inputs {}'.format(data_inputs.shape))
+        print('Default_Methods::AdaptiveAttackVisionTransformer :: Data labels {}'.format(data_labels.shape))
+        print(len(cleanLoader))
+        print((cleanLoader.batch_size))
 
         #Set the attack parameters 
         epsMax = 0.031
@@ -277,14 +305,14 @@ def RaySAttackVisionTransformer(xValData, yValData, qLimit, xCleanData, yCleanDa
 
         #The next line does the actual attack on the defense 
         begin = datetime.now()
-        wf.write("Begin attack at {}".format(begin.strftime('%Y-%m-%d %H:%M:%S')))
+        wf.write("Begin attack at {}\n".format(begin.strftime('%Y-%m-%d %H:%M:%S')))
         advLoader = AttackWrappersRayS.RaySAttack(defense, 
                                             epsMax, 
                                             queryLimit, 
                                             cleanLoader)
         now = datetime.now()
-        wf.write("Complete at {}".format(now.strftime('%Y-%m-%d %H:%M:%S')))
-        wf.write("--- {} seconds ---".format(now - begin))
+        wf.write("Complete at {}\n".format(now.strftime('%Y-%m-%d %H:%M:%S')))
+        wf.write("--- {} seconds ---\n".format(now - begin))
 
         #Check the results 
         robustAcc, tp_5_adv = defense.validateD(advLoader)
@@ -295,11 +323,16 @@ def RaySAttackVisionTransformer(xValData, yValData, qLimit, xCleanData, yCleanDa
         # print("RaySAttackVisionTransformer :: Clean acc: {}".format(cleanAcc))
 
         #Print the results 
-        wf.write("RaySAttackVisionTransformer :: Queries used:{}".format(queryLimit))
-        wf.write("RaySAttackVisionTransformer :: Robust acc:{}".format(robustAcc))
-        wf.write("RaySAttackVisionTransformer :: Top-5 acc on adversarial images:{}".format(tp_5_adv))
-        wf.write("RaySAttackVisionTransformer :: Clean acc:{}".format(cleanAcc))
-        wf.write("RaySAttackVisionTransformer :: Top-5 acc on clean images:{}".format(tp_5))
+        wf.write("RaySAttackVisionTransformer :: Queries used:{}\n".format(queryLimit))
+        wf.write("RaySAttackVisionTransformer :: Robust acc:{}\n".format(robustAcc))
+        wf.write("RaySAttackVisionTransformer :: Top-5 acc on adversarial images:{}\n".format(tp_5_adv))
+        wf.write("RaySAttackVisionTransformer :: Clean acc:{}\n".format(cleanAcc))
+        wf.write("RaySAttackVisionTransformer :: Top-5 acc on clean images:{}\n".format(tp_5))
+
+        #Save the adversarial examples
+        timestamp = start_time.strftime('%Y-%m-%d-%H-%M-%S')
+
+        SaveLoader(savedFilePath, timestamp, 'advLoader',advLoader)
 
         #Visualization
         with torch.no_grad():
@@ -310,46 +343,56 @@ def RaySAttackVisionTransformer(xValData, yValData, qLimit, xCleanData, yCleanDa
 
         #Extract first batch of adv data
         adv_exmp_batch, adv_label_batch = next(iter(advLoader))
+        
+        
         for i in range(valLoader.batch_size):
             show_prediction(exmp_batch[i], 
                           label_batch[i].int(), 
-                          adv_preds[i], 
-                          5, 
+                          adv_preds[i],
+                          savedFilePath,
+                          timestamp,
+                          'adv',
+                          5,
                           adv_exmp_batch[i], 
                           None)
-        #Save the adversarial examples
-        tag = start_time.strftime('%Y-%m-%d-%H-%M-%S'))
-        dataLoaderPathX = 'data/0_RayS_Attack/advLoader_X_{}'.format(tag)
-        dataLoaderPathY = 'data/0_RayS_Attack/advLoader_Y_{}'.format(tag)
-        SaveLoader(dataLoaderPathX, dataLoaderPathY, advLoader):
+        
+        
         now = datetime.now()
-        wf.write("Complete at {}".format(now.strftime('%Y-%m-%d %H:%M:%S')))
-        wf.write("--- {} seconds ---".format(now - start_time))
+        wf.write("Complete at {}\n".format(now.strftime('%Y-%m-%d %H:%M:%S')))
+        wf.write("--- {} seconds ---\n".format(now - start_time))
         
         sys.stdout.flush()
 
 #Here we do the RayS attack on a shuffle defense comprised of two models, ViT-L-16 and BiT-M-R101x3
-def RaySAttackShuffleDefense(xValData, yValData, qLimit, xCleanData, yCleanData):
+def RaySAttackShuffleDefense(xValData, yValData, 
+                                qLimit, attackSampleNum, 
+                                xCleanData, yCleanData,
+                                trainSampleNum, validSampleNum, 
+                                savedFilePath='data/1_RayS_Shuffle/Large'):
     #Load the model and dataset
     saveTag = 'RaySAttackShuffleDefense'
     start_time = datetime.now()
     fileName = '{}_{}.txt'.format(saveTag, start_time)
+
+    if savedFilePath is None:
+        print('savedFilePath is None')
+        sys.exit()
     
     with open(fileName, 'a+') as wf:
         
-        wf.write("Begin at {}".format(start_time.strftime('%Y-%m-%d %H:%M:%S')))
+        wf.write("Begin at {}\n".format(start_time.strftime('%Y-%m-%d %H:%M:%S')))
         #Load the model and dataset
-        valLoader, defense = LoadShuffleDefenseAndCIFAR10(xData, yData)
+        valLoader, defense = LoadShuffleDefenseAndCIFAR10(xValData, yValData, validSampleNum)
         #Get the clean samples
         numClasses = 10
-        attackSampleNum = 100 #1000
+        attackSampleNum = attackSampleNum #1000
         #Only attack correctly classified examples
         if xCleanData and yCleanData:
             print('Default_Methods::RaySAttackShuffleDefense :: Load correctly classified examples from file at {}'.format(xCleanData))
-            xData = numpy.load(xCleanData)
-            yData = numpy.load(yCleanData)
-            cleanLoader = DMP.TensorToDataLoader(torch.from_numpy(xCleanData), 
-                                            torch.from_numpy(yCleanData), 
+            xData = np.load(xCleanData)
+            yData = np.load(yCleanData)
+            cleanLoader = DMP.TensorToDataLoader(torch.from_numpy(xData), 
+                                            torch.from_numpy(yData), 
                                             transforms = None, 
                                             batchSize = valLoader.batch_size, 
                                             randomizer = None)
@@ -358,17 +401,10 @@ def RaySAttackShuffleDefense(xValData, yValData, qLimit, xCleanData, yCleanData)
                                                                 attackSampleNum, 
                                                                 valLoader, 
                                                                 numClasses)
-            saveDir = os.path.join(os.getcwd(), 'ViT-BiT-cleanLoader')
-            if not os.path.isdir(saveDir): #If not there, make the directory 
-              os.makedirs(saveDir)
-            #First convert the tensor to a dataloader 
-            xDataPytorch, yDataPytorch = DMP.DataLoaderToTensor(cleanLoader)
-            #Second conver the pytorch arrays to numpy arrays for saving 
-            xDataNumpy = xDataPytorch.cpu().detach().numpy()
-            yDataNumpy = yDataPytorch.cpu().detach().numpy()
-            #Save the data using numpy
-            numpy.save("{}/cleanLoader_X".format(saveDir), xDataNumpy)
-            numpy.save("{}/cleanLoader_Y".format(saveDir), yDataNumpy)
+    
+            filepath = os.path.join(savedFilePath, 'ViT-BiT-cleanLoader')
+            timestamp = start_time.strftime('%Y-%m-%d-%H-%M-%S')
+            SaveLoader(filepath, timestamp, 'clearnLoader', cleanLoader)
 
         data_inputs, data_labels = next(iter(cleanLoader))
         print('Default_Methods::RaySAttackShuffleDefense :: Sucessfully generate clean examples that are correctly classified by BOTH models. Print basic info of the first batch')
@@ -380,11 +416,11 @@ def RaySAttackShuffleDefense(xValData, yValData, qLimit, xCleanData, yCleanData)
         queryLimit = qLimit #10000
         #The next line does the actual attack on the defense 
         begin = datetime.now()
-        wf.write("Begin attack at {}".format(begin.strftime('%Y-%m-%d %H:%M:%S')))
+        wf.write("Begin attack at {}\n".format(begin.strftime('%Y-%m-%d %H:%M:%S')))
         advLoader = AttackWrappersRayS.RaySAttack(defense, epsMax, queryLimit, cleanLoader)
         now = datetime.now()
-        wf.write("Complete at {}".format(now.strftime('%Y-%m-%d %H:%M:%S')))
-        wf.write("--- {} seconds ---".format(now - begin))
+        wf.write("Complete at {}\n".format(now.strftime('%Y-%m-%d %H:%M:%S')))
+        wf.write("--- {} seconds ---\n".format(now - begin))
 
         data_inputs, data_labels = next(iter(advLoader))
         print('Default_Methods::RaySAttackShuffleDefense :: Sucessfully generate adversarial examples that fool BOTH models. Print basic info of the first batch')
@@ -398,18 +434,48 @@ def RaySAttackShuffleDefense(xValData, yValData, qLimit, xCleanData, yCleanData)
         cleanAcc = defense.validateD(valLoader)
 
         #Print the results 
-        wf.write("Default_Methods::RaySAttackShuffleDefense :: Queries used: {}".format(queryLimit))
-        wf.write("Default_Methods::RaySAttackShuffleDefense :: Robust acc: {}".format(robustAcc))
-        wf.write("Default_Methods::RaySAttackShuffleDefense :: Clean acc: {}".format(cleanAcc))
+        wf.write("Default_Methods::RaySAttackShuffleDefense :: Queries used: {}\n".format(queryLimit))
+        wf.write("Default_Methods::RaySAttackShuffleDefense :: Robust acc: {}\n".format(robustAcc))
+        wf.write("Default_Methods::RaySAttackShuffleDefense :: Clean acc: {}\n".format(cleanAcc))
+
+        #Save the adversarial examples
+        timestamp = start_time.strftime('%Y-%m-%d-%H-%M-%S')
+        SaveLoader(savedFilePath, timestamp, 'advLoader',advLoader)
+
+        #Visualization
+        with torch.no_grad():
+            adv_preds = defense.predictD(advLoader, numClasses)
+
+        #Extract first batch of orig data
+        exmp_batch, label_batch = next(iter(cleanLoader))
+
+        #Extract first batch of adv data
+        adv_exmp_batch, adv_label_batch = next(iter(advLoader))
+        
+
+        for i in range(valLoader.batch_size):
+            show_prediction(exmp_batch[i], 
+                          label_batch[i].int(), 
+                          adv_preds[i], 
+                          savedFilePath,
+                          timestamp,
+                          'adv',
+                          5,
+                          adv_exmp_batch[i], 
+                          None)
+        
 
         now = datetime.now()
-        wf.write("Complete at {}".format(now.strftime('%Y-%m-%d %H:%M:%S')))
-        wf.write("--- {} seconds ---".format(now - start_time))
+        wf.write("Complete at {}\n".format(now.strftime('%Y-%m-%d %H:%M:%S')))
+        wf.write("--- {} seconds ---\n".format(now - start_time))
 
         sys.stdout.flush()
 
 #Run the 100% strength adaptive attack on ViT-L-16, transfer based blackbox attack
-def AdaptiveAttackVisionTransformer():
+def AdaptiveAttackVisionTransformer(xValData, yValData, 
+                                qLimit, attackSampleNum, 
+                                xCleanData, yCleanData,
+                                trainSampleNum, validSampleNum, savedFilePath):
 
     #Corresponding tag for saving files
     #First part indicates the type of defense, second part indidcates the synthetic model and last part indicates the strenght of the attack (100%)
@@ -421,8 +487,8 @@ def AdaptiveAttackVisionTransformer():
     fileName = '{}_{}.txt'.format(saveTag, start_time)
     with open(fileName, 'a+') as wf:
         #Attack parameters       
-        wf.write("Begin at {}".format(start_time.strftime('%Y-%m-%d %H:%M:%S')))
-        numAttackSamples = 1000 # 1000
+        wf.write("Begin at {}\n".format(start_time.strftime('%Y-%m-%d %H:%M:%S')))
+        numAttackSamples = attackSampleNum # 1000
         epsForAttacks = 0.031
         clipMin = 0.0 
         clipMax = 1.0
@@ -434,10 +500,15 @@ def AdaptiveAttackVisionTransformer():
         epochsPerIteration = 1 #1 
         epsForAug = 0.1 #when generating synthetic data, this value is eps for FGSM used to generate synthetic data
         learningRate = (3e-2) / 2 #Learning rate of the synthetic model 
-        #Load the training dataset, validation dataset and the defense 
-        valLoader, defense = LoadViTLAndCIFAR10()
+        #Load the validation dataset and the defense 
+        valLoader, defense = LoadViTLAndCIFAR10(xValData, yValData, validSampleNum)
 
-        trainLoader = DMP.GetCIFAR10Training(imgSize, batchSize)
+        cleanAcc, tp_5 = defense.validateD(valLoader)
+        wf.write("AdaptiveAttackVisionTransformer :: Before attack :: Clean acc:{}\n".format(cleanAcc))
+        wf.write("AdaptiveAttackVisionTransformer :: Before attack :: Top-5 acc:{}\n".format(tp_5))
+
+        #Load the training dataset and the defense 
+        trainLoader = DMP.GetCIFAR10Training(trainSampleNum, imgSize, batchSize)
         data_inputs, data_labels = next(iter(trainLoader))
         print('Default_Methods::AdaptiveAttackVisionTransformer :: Sucessfully load the train data. Print basic info of the first batch')
         print('Default_Methods::AdaptiveAttackVisionTransformer :: Data inputs {}'.format(data_inputs.shape))
@@ -446,8 +517,25 @@ def AdaptiveAttackVisionTransformer():
         #Get the clean data 
         xTest, yTest = DMP.DataLoaderToTensor(valLoader)
 
-        #Clean validation loader
-        cleanLoader = DMP.GetCorrectlyIdentifiedSamplesBalancedDefense(defense, numAttackSamples, valLoader, numClasses)
+        #Only attack correctly classified examples
+        if xCleanData and yCleanData:
+            print('Default_Methods::AdaptiveAttackVisionTransformer :: Load correctly classified examples from file at {}'.format(xCleanData))
+            xData = np.load(xCleanData)
+            yData = np.load(yCleanData)
+            cleanLoader = DMP.TensorToDataLoader(torch.from_numpy(xData), 
+                                            torch.from_numpy(yData), 
+                                            transforms = None, 
+                                            batchSize = valLoader.batch_size, 
+                                            randomizer = None)
+        else:
+            cleanLoader = DMP.GetCorrectlyIdentifiedSamplesBalancedDefense(defense, 
+                                                                    numAttackSamples, 
+                                                                    valLoader, 
+                                                                    numClasses)
+            filepath = os.path.join(savedFilePath, 'ViT-BiT-cleanLoader')
+            timestamp = start_time.strftime('%Y-%m-%d-%H-%M-%S')
+            SaveLoader(filepath, timestamp, 'cleanLoader',cleanLoader)
+
         data_inputs, data_labels = next(iter(cleanLoader))
         print('Default_Methods::AdaptiveAttackVisionTransformer :: Sucessfully generate clean examples that are correctly classified by BOTH models. Print basic info of the first batch')
         print('Default_Methods::AdaptiveAttackVisionTransformer :: Data inputs {}'.format(data_inputs.shape))
@@ -458,9 +546,9 @@ def AdaptiveAttackVisionTransformer():
         syntheticDir = "Models//imagenet21k_ViT-B_32.npz" #imagenet21k_ViT-B_32.npz
         config = CONFIGS["ViT-B_32"]
         syntheticModel = VisionTransformer(config, imgSize, zero_head=True, num_classes=numClasses)
-        syntheticModel.load_from(numpy.load(syntheticDir))  
+        syntheticModel.load_from(np.load(syntheticDir))  
         syntheticModel.to(device)
-        print('Default_Methods::AdaptiveAttackVisionTransformer :: Successfully load pre-train model {} to device'.format(syntheticDir, device))
+        print('Default_Methods::AdaptiveAttackVisionTransformer :: Successfully load synthetic(substitute) model {} to device'.format(syntheticDir, device))
 
         #Do the attack 
         oracle = defense
@@ -468,36 +556,75 @@ def AdaptiveAttackVisionTransformer():
         optimizerName = "sgd"
         #Last line does the attack
         begin = datetime.now()
-        wf.write("Begin attack at {}".format(begin.strftime('%Y-%m-%d %H:%M:%S')))
-        AttackWrappersAdaptiveBlackBox.AdaptiveAttack(saveTag, device, oracle, syntheticModel, 
-                                                numIterations, epochsPerIteration, epsForAug, 
-                                                learningRate, optimizerName, dataLoaderForTraining, 
-                                              cleanLoader, numClasses, epsForAttacks, clipMin, clipMax)
-        now = datetime.now()
-        wf.write("Complete the attack at {}".format(now.strftime('%Y-%m-%d %H:%M:%S')))
-        wf.write("--- {} seconds ---".format(now - begin))
+        wf.write("Begin attack at {}\n".format(begin.strftime('%Y-%m-%d %H:%M:%S')))
+        advLoader, syntheticModel = AttackWrappersAdaptiveBlackBox.AdaptiveAttack(saveTag, device, oracle,
+                                                syntheticModel, 
+                                                numIterations, 
+                                                epochsPerIteration, epsForAug, 
+                                                learningRate, optimizerName, 
+                                                dataLoaderForTraining, 
+                                              cleanLoader, 
+                                              numClasses, 
+                                              epsForAttacks, clipMin, clipMax)
+
+        #Save the adversarial examples
+        timestamp = start_time.strftime('%Y-%m-%d-%H-%M-%S')
+        SaveLoader(savedFilePath, timestamp, 'advLoader', advLoader)
+
+        #Visualization
+        with torch.no_grad():
+            adv_preds = defense.predictD(advLoader, numClasses)
+
+        #Extract first batch of orig data
+        exmp_batch, label_batch = next(iter(cleanLoader))
+
+        #Extract first batch of adv data
+        adv_exmp_batch, adv_label_batch = next(iter(advLoader))
+
+        for i in range(valLoader.batch_size):
+            show_prediction(exmp_batch[i], 
+                          label_batch[i].int(), 
+                          adv_preds[i], 
+                          savedFilePath,
+                          timestamp,
+                          'adv',
+                          5,
+                          adv_exmp_batch[i], 
+                          None)
+        
 
         now = datetime.now()
-        wf.write("Complete at {}".format(now.strftime('%Y-%m-%d %H:%M:%S')))
-        wf.write("--- {} seconds ---".format(now - start_time))
+        wf.write("Complete the attack at {}\n".format(now.strftime('%Y-%m-%d %H:%M:%S')))
+        wf.write("--- {} seconds ---\n".format(now - begin))
+
+        now = datetime.now()
+        wf.write("Complete at {}\n".format(now.strftime('%Y-%m-%d %H:%M:%S')))
+        wf.write("--- {} seconds ---\n".format(now - start_time))
 
         sys.stdout.flush()
 
 #Run the 100% strength adaptive attack on shuffle defense
-def AdaptiveAttackShuffleDefense():
+def AdaptiveAttackShuffleDefense(xValData, yValData, 
+                                qLimit, attackSampleNum, 
+                                xCleanData, yCleanData,
+                                trainSampleNum, validSampleNum, savedFilePath):
     #Corresponding tag for saving files
     #First part indicates the type of defense, second part indidcates the synthetic model and last part indicates the strenght of the attack (100%)
     saveTag = "Adaptive_Attack_Defense_ViT-L-16, ViT-32(ImageNet21K), p100" 
     device = torch.device("cuda")
     print("Device {}".format(device))
     start_time = datetime.now()
+
+    if savedFilePath is None:
+        print('savedFilePath is None')
+        sys.exit()
     
     fileName = '{}_{}.txt'.format(saveTag, start_time)
     with open(fileName, 'a+') as wf:  
-        wf.write("Begin at {}".format(start_time.strftime('%Y-%m-%d %H:%M:%S')))
+        wf.write("Begin at {}\n".format(start_time.strftime('%Y-%m-%d %H:%M:%S')))
 
         #Attack parameters 
-        numAttackSamples = 1000 #1000
+        numAttackSamples = attackSampleNum #1000
         epsForAttacks = 0.031
         clipMin = 0.0 
         clipMax = 1.0
@@ -511,11 +638,15 @@ def AdaptiveAttackShuffleDefense():
         epsForAug = 0.1 #when generating synthetic data, this value is eps for FGSM used to generate synthetic data
         learningRate = (3e-2) / 2 #Learning rate of the synthetic model
 
-        #Load the training dataset, validation dataset and the defense 
-        valLoader, defense = LoadShuffleDefenseAndCIFAR10()
-        print('Default_Methods::AdaptiveAttackShuffleDefense :: Sucessfully load the ensemble defense. Print basic info of the first batch')
+        #Load the training dataset, validation dataset and the ensembles
+        valLoader, defense = LoadShuffleDefenseAndCIFAR10(xValData, yValData, validSampleNum)
+        print('Default_Methods::AdaptiveAttackShuffleDefense :: Sucessfully load the ensemble defense')
 
-        trainLoader = DMP.GetCIFAR10Training(imgSize, batchSize)
+        cleanAcc, tp_5 = defense.validateD(valLoader)
+        wf.write("AdaptiveAttackVisionTransformer :: Before attack :: Clean acc:{}\n".format(cleanAcc))
+        wf.write("AdaptiveAttackVisionTransformer :: Before attack :: Top-5 error:{}\n".format(tp_5))
+
+        trainLoader = DMP.GetCIFAR10Training(trainSampleNum, imgSize, batchSize)
         data_inputs, data_labels = next(iter(trainLoader))
         print('Default_Methods::AdaptiveAttackShuffleDefense :: Sucessfully load the train data. Print basic info of the first batch')
         print('Default_Methods::AdaptiveAttackShuffleDefense :: Data inputs {}'.format(data_inputs.shape))
@@ -523,7 +654,24 @@ def AdaptiveAttackShuffleDefense():
 
         #Get the clean data 
         xTest, yTest = DMP.DataLoaderToTensor(valLoader)
-        cleanLoader = DMP.GetCorrectlyIdentifiedSamplesBalancedDefense(defense, numAttackSamples, valLoader, numClasses)
+        #Only attack correctly classified examples
+        if xCleanData and yCleanData:
+            print('Default_Methods::AdaptiveAttackVisionTransformer :: Load correctly classified examples from file at {}'.format(xCleanData))
+            xData = np.load(xCleanData)
+            yData = np.load(yCleanData)
+            cleanLoader = DMP.TensorToDataLoader(torch.from_numpy(xData), 
+                                            torch.from_numpy(yData), 
+                                            transforms = None, 
+                                            batchSize = valLoader.batch_size, 
+                                            randomizer = None)
+        else:
+            cleanLoader = DMP.GetCorrectlyIdentifiedSamplesBalancedDefense(defense, 
+                                                                    numAttackSamples, 
+                                                                    valLoader, 
+                                                                    numClasses)
+            filepath = os.path.join(savedFilePath, 'ViT-BiT-cleanLoader')
+            timestamp = start_time.strftime('%Y-%m-%d-%H-%M-%S')
+            SaveLoader(filepath, timestamp, 'cleanLoader',cleanLoader)
 
         data_inputs, data_labels = next(iter(cleanLoader))
         print('Default_Methods::AdaptiveAttackShuffleDefense :: Sucessfully generate clean examples that are correctly classified by BOTH models. Print basic info of the first batch')
@@ -534,7 +682,7 @@ def AdaptiveAttackShuffleDefense():
         syntheticDir = "Models//imagenet21k_ViT-B_32.npz"
         config = CONFIGS["ViT-B_32"]
         syntheticModel = VisionTransformer(config, imgSize, zero_head=True, num_classes=numClasses)
-        syntheticModel.load_from(numpy.load(syntheticDir))  
+        syntheticModel.load_from(np.load(syntheticDir))  
         syntheticModel.to(device)
         print('Default_Methods::AdaptiveAttackShuffleDefense :: Successfully load pre-train model {} to device'.format(syntheticDir, device))
 
@@ -544,33 +692,62 @@ def AdaptiveAttackShuffleDefense():
         optimizerName = "sgd"
         #Last line does the attack
         begin = datetime.now()
-        wf.write("Begin attack at {}".format(begin.strftime('%Y-%m-%d %H:%M:%S')))
-        AttackWrappersAdaptiveBlackBox.AdaptiveAttack(saveTag, device, oracle, syntheticModel, 
+        wf.write("Begin attack at {}\n".format(begin.strftime('%Y-%m-%d %H:%M:%S')))
+        advLoader, syntheticModel = AttackWrappersAdaptiveBlackBox.AdaptiveAttack(saveTag, device, oracle, syntheticModel, 
                                                         numIterations, epochsPerIteration, epsForAug, 
                                                         learningRate, optimizerName, dataLoaderForTraining, 
                                                         cleanLoader, numClasses, epsForAttacks, clipMin, clipMax)
-        now = datetime.now()
-        wf.write("Complete the attack at {}".format(now.strftime('%Y-%m-%d %H:%M:%S')))
-        wf.write("--- {} seconds ---".format(now - begin))
+        #Save the adversarial examples
+        timestamp = start_time.strftime('%Y-%m-%d-%H-%M-%S')
+
+        SaveLoader(savedFilePath, timestamp, 'advLoader', advLoader)
+
+        #Visualization
+        with torch.no_grad():
+            adv_preds = defense.predictD(advLoader, numClasses)
+
+        #Extract first batch of orig data
+        exmp_batch, label_batch = next(iter(cleanLoader))
+
+        #Extract first batch of adv data
+        adv_exmp_batch, adv_label_batch = next(iter(advLoader))
+
+        for i in range(valLoader.batch_size):
+            show_prediction(exmp_batch[i], 
+                          label_batch[i].int(), 
+                          adv_preds[i], 
+                          savedFilePath,
+                          timestamp,
+                          'adv',
+                          5,
+                          adv_exmp_batch[i], 
+                          None)
 
         now = datetime.now()
-        wf.write("Complete at {}".format(now.strftime('%Y-%m-%d %H:%M:%S')))
-        wf.write("--- {} seconds ---".format(now - start_time))
+        wf.write("Complete the attack at {}\n".format(now.strftime('%Y-%m-%d %H:%M:%S')))
+        wf.write("--- {} seconds ---\n".format(now - begin))
+
+        now = datetime.now()
+        wf.write("Complete at {}\n".format(now.strftime('%Y-%m-%d %H:%M:%S')))
+        wf.write("--- {} seconds ---\n".format(now - start_time))
 
         sys.stdout.flush()
 
 #Run the Self-Attention Gradient Attack (SAGA) on ViT-L and BiT-M-R101x3
-def SelfAttentionGradientAttackCIFAR10():
+def SelfAttentionGradientAttackCIFAR10(xValData, yValData, 
+                                attackSampleNum, 
+                                xCleanData, yCleanData,
+                                trainSampleNum, validSampleNum, savedFilePath):
     #Load the model and dataset
     saveTag = 'SelfAttentionGradientAttackCIFAR10'
     start_time = datetime.now()
     
     fileName = '{}_{}.txt'.format(saveTag, start_time)
     with open(fileName, 'a+') as wf:
-        wf.write("Begin at {}".format(start_time.strftime('%Y-%m-%d %H:%M:%S')))
+        wf.write("Begin at {}\n".format(start_time.strftime('%Y-%m-%d %H:%M:%S')))
         print("Default_Methods::SelfAttentionGradientAttackCIFAR10 :: Running Self-Attention Gradient Attack on ViT-L-16 and BiT-M-R101x3")
         #Set up the parameters for the attack 
-        attackSampleNum = 10
+        attackSampleNum = attackSampleNum
         numClasses = 10
         coefficientArray = torch.zeros(2)
         secondcoeff = 2.0000e-04
@@ -587,7 +764,14 @@ def SelfAttentionGradientAttackCIFAR10():
         numSteps = 10
         #Load the models and the dataset
         #Note it is important to set vis to true so the transformer's model output returns the attention weights 
-        valLoader, defense = LoadShuffleDefenseAndCIFAR10(vis=True)
+        valLoader, defense = LoadShuffleDefenseAndCIFAR10(xValData, 
+                                            yValData, 
+                                            validSampleNum, 
+                                            vis=True)
+
+        cleanAcc, tp_5 = defense.validateD(valLoader)
+        wf.write("SAGACIFAR10 :: Before attack :: Clean acc:{}\n".format(cleanAcc))
+        wf.write("SAGACIFAR10 :: Before attack :: Top-5 acc:{}\n".format(tp_5))
 
         data_inputs, data_labels = next(iter(valLoader))
         print('Default_Methods::SelfAttentionGradientAttackCIFAR10 :: Sucessfully load the valid data. Print basic info of the first batch')
@@ -596,13 +780,31 @@ def SelfAttentionGradientAttackCIFAR10():
 
         modelPlusList = defense.modelPlusList
         #Note that the batch size will effect how the gradient is computed in PyTorch
-        #Here we use batch size 8 for ViT-L and batch size 2 for BiT-M. Other batch sizes are possible but they will not generate the same result
+        #Here we use batch size 8 for ViT-L and batch size 2 for BiT-M. 
+        #Other batch sizes are possible but they will not generate the same result
         modelPlusList[0].batchSize = 8
         modelPlusList[1].batchSize = 2
 
         #Get the clean examples 
-        cleanLoader =AttackWrappersSAGA.GetFirstCorrectlyOverlappingSamplesBalanced(device, 
+        #Only attack correctly classified examples
+        if xCleanData and yCleanData:
+            print('Default_Methods::AdaptiveAttackVisionTransformer :: Load correctly classified examples from file at {}'.format(xCleanData))
+            xData = np.load(xCleanData)
+            yData = np.load(yCleanData)
+            cleanLoader = DMP.TensorToDataLoader(torch.from_numpy(xData), 
+                                            torch.from_numpy(yData), 
+                                            transforms = None, 
+                                            batchSize = valLoader.batch_size, 
+                                            randomizer = None)
+        else:
+            cleanLoader =AttackWrappersSAGA.GetFirstCorrectlyOverlappingSamplesBalanced(device, 
                                     attackSampleNum, numClasses, valLoader, modelPlusList)
+
+            filepath = os.path.join(savedFilePath, 'ViT-BiT-cleanLoader')
+            timestamp = start_time.strftime('%Y-%m-%d-%H-%M-%S')
+            
+  
+            SaveLoader(filepath, timestamp, 'cleanLoader', cleanLoader)
 
         data_inputs, data_labels = next(iter(cleanLoader))
         print('Default_Methods::SelfAttentionGradientAttackCIFAR10 :: Sucessfully load the clean data that are classified corrected by the component models. Print basic info of the first batch')
@@ -611,14 +813,19 @@ def SelfAttentionGradientAttackCIFAR10():
 
         #Do the attack
         begin = datetime.now()
-        wf.write("Begin attack at {}".format(begin.strftime('%Y-%m-%d %H:%M:%S')))
+        wf.write("Begin attack at {}\n".format(begin.strftime('%Y-%m-%d %H:%M:%S')))
 
         advLoader = AttackWrappersSAGA.SelfAttentionGradientAttack(device, epsMax, 
             numSteps, modelPlusList, coefficientArray, cleanLoader, clipMin, clipMax)
 
         now = datetime.now()
-        wf.write("Complete the attack at {}".format(now.strftime('%Y-%m-%d %H:%M:%S')))
-        wf.write("--- {} seconds ---".format(now - begin))
+        wf.write("Complete the attack at {}\n".format(now.strftime('%Y-%m-%d %H:%M:%S')))
+        wf.write("--- {} seconds ---\n".format(now - begin))
+
+        #Save the adversarial examples
+        timestamp = start_time.strftime('%Y-%m-%d-%H-%M-%S')
+        SaveLoader(savedFilePath, timestamp, 'advLoader', advLoader)
+
 
         data_inputs, data_labels = next(iter(advLoader))
         print('Default_Methods::SelfAttentionGradientAttackCIFAR10 :: Sucessfully generate the adversarial examples using the proposed attack. Print basic info of the first batch')
@@ -628,10 +835,32 @@ def SelfAttentionGradientAttackCIFAR10():
         #Go through and check the robust accuray of each model on the adversarial examples 
         for i in range(0, len(modelPlusList)):
             acc = modelPlusList[i].validateD(advLoader)
-            wf.write('model Name {} Robust acc: {}'.format(modelPlusList[i].modelName, acc))
+            wf.write('model name {} Robust acc: {}\n'.format(modelPlusList[i].modelName, acc))
 
+        #Visualization
+        for i in range(0, len(modelPlusList)):
+            with torch.no_grad():
+                adv_preds = modelPlusList[i].predictD(advLoader, numClasses)
+
+            #Extract first batch of orig data
+            exmp_batch, label_batch = next(iter(cleanLoader))
+
+            #Extract first batch of adv data
+            adv_exmp_batch, adv_label_batch = next(iter(advLoader))
+
+            filepath = os.path.join(savedFilePath, modelPlusList[i].modelName)
+            for i in range(valLoader.batch_size):
+                show_prediction(exmp_batch[i], 
+                              label_batch[i].int(), 
+                              adv_preds[i], 
+                              filepath,
+                              timestamp,
+                              'adv',
+                              5,
+                              adv_exmp_batch[i], 
+                              None)
         now = datetime.now()
-        wf.write("Complete at {}".format(now.strftime('%Y-%m-%d %H:%M:%S')))
-        wf.write("--- {} seconds ---".format(now - start_time))
+        wf.write("Complete at {}\n".format(now.strftime('%Y-%m-%d %H:%M:%S')))
+        wf.write("--- {} seconds ---\n".format(now - start_time))
 
         sys.stdout.flush()
