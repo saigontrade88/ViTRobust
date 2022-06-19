@@ -6,3 +6,4 @@ VisionTransformersRobustness/VisionTransformersRobustness/Results/Med_2_Adaptive
 *.zip
 VisionTransformersRobustness/VisionTransformersRobustness/Results/Med_2_Adaptive_Attack/AdvLoaderMIM
 *.out
+*.pyc
