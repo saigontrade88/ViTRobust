@@ -84,7 +84,7 @@ class ModelPlus():
         if sampleShape[1] == self.imgSizeH and sampleShape[2] == self.imgSizeW:
             return dataLoader
         else: #We need to do resizing 
-            print("Resize required. Processing now.")
+            # print("Resize required. Processing now.")
             p = torchvision.transforms.ToPILImage()
             t = torchvision.transforms.ToTensor()
             numSamples = len(dataLoader.dataset) 
