@@ -6,28 +6,54 @@ import DataManagerPytorch as DMP
 import time 
 import torch.nn.functional as F
 
+# advLoader = AttackWrappersRayS.RaySAttack(defense, 
+#                                             epsMax, 
+#                                             queryLimit, 
+#                                             cleanLoader)
+
 def RaySAttack(model, epsMax, queryLimit, cleanLoader):
+    #queryLimit: the number of queries used for finding the adversarial examples,
     xClean, yClean = DMP.DataLoaderToTensor(cleanLoader)
+
+    #model is the PyTorch model under VisionTransformer/Model plus warpper
+    #epsilon is the maximum adversarial perturbation strength
     rayS = RayS(model, epsilon=epsMax, order = np.inf)
-    xAdv = torch.zeros((xClean.shape[0], xClean.shape[1], xClean.shape[2], xClean.shape[3]))
+    #the adversarial examples found by RayS
+    xAdv = torch.zeros((xClean.shape[0], 
+        xClean.shape[1], 
+        xClean.shape[2], 
+        xClean.shape[3]))
     #Go through and attack the samples 
     for i in range(0, xClean.shape[0]):
         print(i)
-        start = time.time()
+        # start = time.time()
         #yCurrent = torch.zeros((1,))
         #yCurrent[0] = 
-        xAdvCurrent, stop_queries, dist, isLessDist = rayS.attack_hard_label(xClean[i].cuda(), yClean[i].cuda(), target=None, query_limit=queryLimit, seed=None)
+
+        #xAdvCurrent: the adversarial examples found by RayS
+        #stop_queries: the number of queries used for finding the adversarial examples,
+        #dist is the average decision boundary distance for each example,
+        #isLessDist: indicate whether each example being successfully attacked.
+        xAdvCurrent, stop_queries, dist, isLessDist = rayS.attack_hard_label(xClean[i].cuda(), 
+                                    yClean[i].cuda(), 
+                                    target=None, 
+                                    query_limit=queryLimit, 
+                                    seed=None)
         xAdvCurrent = xAdvCurrent.cpu().detach()
+
+        #Norm infinity distance between the RayS adversarial example and the target sample,
         dist = torch.dist(xAdvCurrent, xClean[i], np.inf)
         if dist>epsMax:
-            print("Attack failed, returning clean sample instead.")
+            # print("Attack failed, returning clean sample instead.")
             xAdv[i] = xClean[i]
         else:
             xAdv[i] = xAdvCurrent
         end = time.time()
-        print("Time Elapsed:", end-start)
+        # print("Time Elapsed:", end-start)
     #Put solution in dataloader and return 
-    advLoader = DMP.TensorToDataLoader(xAdv, yClean, transforms = None, batchSize = cleanLoader.batch_size, randomizer = None)
+    advLoader = DMP.TensorToDataLoader(xAdv, yClean, transforms = None, 
+                                    batchSize = cleanLoader.batch_size, 
+                                    randomizer = None)
     return advLoader
 
 class RayS(object):
@@ -56,6 +82,7 @@ class RayS(object):
         if seed is not None:
             np.random.seed(seed)
 
+        # init variables
         self.queries = 0
         self.d_t = np.inf
         self.sgn_t = torch.sign(torch.ones(shape)).cuda()
@@ -86,7 +113,7 @@ class RayS(object):
                 break
 
             if self.queries >= query_limit:
-                print('out of queries')
+                print('out of queries then break.')
                 break
 
         #    if i % 10 == 0:
@@ -95,6 +122,7 @@ class RayS(object):
         #print("Iter %3d d_t %.6f dist %.6f queries %d" % (i + 1, self.d_t, dist, self.queries))
         return self.x_final, self.queries, dist, (dist <= self.epsilon).float()
 
+    # check whether solution is found
     def search_succ(self, x, y, target):
         self.queries += 1
         if target:
@@ -107,6 +135,7 @@ class RayS(object):
             #return self.model(x[None].cuda()).argmax(axis=1) != y
             #return self.model.predict_label(x) != y
 
+
     def lin_search(self, x, y, target, sgn):
         d_end = np.inf
         for d in range(1, self.lin_search_rad + 1):
@@ -115,6 +144,7 @@ class RayS(object):
                 break
         return d_end
 
+    # binary search for decision boundary along sgn direction
     def binary_search(self, x, y, target, sgn, tol=1e-3):
         sgn_unit = sgn / torch.norm(sgn)
         sgn_norm = torch.norm(sgn)
