@@ -6,6 +6,7 @@ from DataLoaderGiant import DataLoaderGiant
 from datetime import date
 import os
 import logging
+from datetime import datetime
 global queryCounter #keep track of the numbers of queries used in the adaptive black-box attack, just for record keeping
 
 #Set up logger
@@ -22,9 +23,10 @@ logger = logging.getLogger(__name__)
 
 def AdaptiveAttack(saveTag, device, oracle, syntheticModel, numIterations, epochsPerIteration, epsForAug, learningRate, optimizerName, dataLoaderForTraining, valLoader, numClasses, epsForAttacks, clipMin, clipMax):
     #Create place to save all files
-    today = date.today()
-    dateString = today.strftime("%B"+"-"+"%d"+"-"+"%Y, ") #Get the year, month, day
-    experimentDateAndName = dateString + saveTag #Name of experiment with data 
+    # today = date.today()
+    start_time = datetime.now() 
+    timestamp = start_time.strftime('%Y-%m-%d-%H-%M-%S')
+    experimentDateAndName = timestamp + saveTag #Name of experiment with data 
     saveDir = os.path.join(os.getcwd(), experimentDateAndName)
     if not os.path.isdir(saveDir): #If not there, make the directory 
         os.makedirs(saveDir)
@@ -43,7 +45,7 @@ def AdaptiveAttack(saveTag, device, oracle, syntheticModel, numIterations, epoch
                         numIterations, epochsPerIteration, epsForAug, 
                         learningRate, optimizerName, dataLoaderForTraining, 
                         numClasses, clipMin, clipMax)
-    print('AttackWrappersAdaptiveAttack::AdaptiveAttack::Save the trained syntheticModel.')
+    print('AttackWrappersAdaptiveAttack::AdaptiveAttack::Save the adversarially trained syntheticModel.')
     torch.save(syntheticModel, saveDir+"//SyntheticModel")
 
     #Next run the attack 
@@ -51,11 +53,18 @@ def AdaptiveAttack(saveTag, device, oracle, syntheticModel, numIterations, epoch
     numSteps = 10 
     epsStep = epsForAttacks/numSteps
 
-    # Step 4: The resulting adversarial examples are tested on the defense
-    advLoaderMIM = AttackWrappersWhiteBoxP.MIMNativePytorch(device, valLoader, syntheticModel, decayFactor, epsForAttacks, epsStep, numSteps, clipMin, clipMax, targeted = False)
+    # Step 4: Generate the adversarial examples based on the synthetic model
+    advLoaderMIM = AttackWrappersWhiteBoxP.MIMNativePytorch(device, 
+                                            valLoader, syntheticModel, 
+                                            decayFactor, epsForAttacks, 
+                                            epsStep, numSteps, 
+                                            clipMin, clipMax, targeted = False)
+
+    print('AttackWrappersAdaptiveAttack::AdaptiveAttack::Save the adversarial example.')
     torch.save(advLoaderMIM, saveDir+"//AdvLoaderMIM")
     torch.cuda.empty_cache()
 
+    # Step 5: Attack the target model/oracle
     cleanAcc = oracle.validateD(valLoader)
     robustAccMIM = oracle.validateD(advLoaderMIM)
 
@@ -70,6 +79,8 @@ def AdaptiveAttack(saveTag, device, oracle, syntheticModel, numIterations, epoch
 
     os.chdir("..") #move up one directory to return to original directory 
 
+    return advLoaderMIM, syntheticModel
+    
 #Method to label the data using the oracle 
 def LabelDataUsingOracle(oracle, dataLoader, numClasses):
     global queryCounter
