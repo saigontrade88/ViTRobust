@@ -233,7 +233,7 @@ def GetFirstCorrectlyIdentifiedExamples(device, dataLoader, model, numSamples):
     return cleanLoader
 
 #This data is in the range 0 to 1
-def GetCIFAR10Validation(imgSize = 32, batchSize=128):
+def GetCIFAR10Validation(validSampleNum, imgSize = 32, batchSize=128):
     transformTest = transforms.Compose([
         transforms.Resize((imgSize, imgSize)),
         transforms.ToTensor()
@@ -241,13 +241,13 @@ def GetCIFAR10Validation(imgSize = 32, batchSize=128):
 
     val_dataset = datasets.CIFAR10(root='./data', train=False, download=True, transform=transformTest)
 
-    # val_dataset, _ = torch.utils.data.random_split(val_dataset, [1000, 5000])
+    val_dataset, _ = torch.utils.data.random_split(val_dataset, [validSampleNum, 10000 - validSampleNum])
     print('DataManagerPytorch::Val dataset length {}'.format(len(val_dataset)))
     valLoader = torch.utils.data.DataLoader(val_dataset, batch_size=batchSize, shuffle=False, num_workers=1, pin_memory=True)
     return valLoader
 
 #This data is in the range 0 to 1
-def GetCIFAR10Training(imgSize = 32, batchSize=128):
+def GetCIFAR10Training(trainSampleNum, imgSize = 32, batchSize=128):
     toTensorTransform = transforms.Compose([
         transforms.Resize((imgSize, imgSize)),
         transforms.ToTensor()
@@ -255,7 +255,7 @@ def GetCIFAR10Training(imgSize = 32, batchSize=128):
 
     train_dataset = datasets.CIFAR10(root='./data', train=True, download=True, transform=toTensorTransform)
 
-    # train_dataset, _= torch.utils.data.random_split(train_dataset, [1000, 49000])
+    train_dataset, _= torch.utils.data.random_split(train_dataset, [trainSampleNum, 50000 - trainSampleNum])
     print('DataManagerPytorch::Train dataset length {}'.format(len(train_dataset)))
 
     trainLoader = torch.utils.data.DataLoader(train_dataset, batch_size=batchSize, shuffle=False, num_workers=1, pin_memory=True)
