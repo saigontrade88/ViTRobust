@@ -1,7 +1,7 @@
 #! /bin/bash
-#SBATCH --job-name="RaySAttackViT"
-#SBATCH --output=out_RayS_%j.txt
-#SBATCH --error=err_RayS_%j.txt
+#SBATCH --job-name="AdaptiveShuffleViT"
+#SBATCH --output=out_Adaptive_Shuffle_%j.txt
+#SBATCH --error=err_Adaptive_Shuffle_%j.txt
 #SBATCH --cpus-per-task=3
 #SBATCH --gres=gpu:1
 #SBATCH --mem=128G
@@ -20,10 +20,10 @@ conda activate torch_171
 
 echo "CUDA_VISIBLE_DEVICES=$CUDA_VISIBLE_DEVICES"
 
-python3 VisionTransformersRobustness.py -methodID 0 -qLimit 10000 -attackSampleNum 100 \
+python3 VisionTransformersRobustness.py -methodID 3 -qLimit 10000 -attackSampleNum 100 \
 										-trainSampleNum 50000 \
 										-validSampleNum 10000 \
-										-savedFilePath "data/0_RayS_Attack/Large"
+										-savedFilePath data/3_Adaptive_Shuffle/Large
 							
 #SBATCH --partition=simmons_itn18 
 #SBATCH --qos=preempt_short
