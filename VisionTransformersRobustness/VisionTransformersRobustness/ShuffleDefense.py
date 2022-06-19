@@ -1,5 +1,6 @@
 #Shuffle Defense code
-#This class takes in a list of models that have already been wrapped in the ModelPlus class
+#This class takes in a list of models that 
+# have already been wrapped in the ModelPlus class
 #At run time one model is randomly selected to predict each example 
 import torch
 import DataManagerPytorch as DMP
@@ -20,11 +21,13 @@ class ShuffleDefense():
         #Randomly select which samples are predicted by which model 
         sampleAssignments = numpy.random.randint(0, self.numModels, (numSamples,))
         acc = 0
-        #Go through the models, get the sample subset they need to predict on, then do the prediction
+        #Go through the models, get the sample subset they need to predict on, 
+        # then do the prediction
         for modelIndex in range(0, self.numModels):
             currentModelPlus = self.modelPlusList[modelIndex]
             #Filter the data to get the samples only the currrent model should predict on
-            dataLoaderSubset = self.filterSamplesIntoDataLoader(modelIndex, sampleAssignments, xTest, yTest, currentModelPlus.batchSize)
+            dataLoaderSubset = self.filterSamplesIntoDataLoader(modelIndex, 
+                sampleAssignments, xTest, yTest, currentModelPlus.batchSize)
             #Get the array of correct predictions
             currentAccArray = currentModelPlus.validateDA(dataLoaderSubset)
             acc = acc + currentAccArray.sum()
